@@ -25,6 +25,7 @@ unicode tables:
 
 """
 
+# TODO: light emiiting lamps, difference fov - light, turning lamps on and off, sight_distacne <> torchradius
 # TODO: big enjoy Flytext: grid is painted OVER flytext? -> hould be: first grid, than flytext on top!
 # TODO: make bitmpap out of every maketext-char to faciliate easier replacing with images
 # TODO: fireeffect sprite erscheint in der linken oberen ecke -> create_image / init / update ?
@@ -45,7 +46,7 @@ unicode tables:
 import pygame
 import random
 import os
-
+version = 0.5
 
 class VectorSprite(pygame.sprite.Sprite):
     """base class for sprites. this class inherits from pygames sprite class"""
@@ -474,7 +475,7 @@ class Game:
                         myclass = legend[char]
                         if "Structure" in classnames:
                             #new_line.append(legend[char]())  # create new tile
-                            print("adding structure", char)
+                            #print("adding structure", char)
                             # find out what kind of neighbors we must look for
                             if myclass.nesw_tile is not None:
                                 nesw = [False, False, False, False]  # N, E, S, W
@@ -494,11 +495,11 @@ class Game:
                         elif "Monster" in classnames:
                             new_line.append(Floor())
                             myclass(x, y, z)  # create new monster. the instance lives in Game.zoo automatically
-                            print("adding monster", char)
+                            #print("adding monster", char)
                         elif "Item" in classnames:
                             new_line.append(Floor())
                             myclass(x, y, z)  # create new item. the instance lives in Game.items automatically
-                            print("adding item", char)
+                            #print("adding item", char)
                         else:
                             print("strange char in raw level detected... ")
                             raise ValueError("unknow char (not in legend) in level map:", char, "xyz:", x, y, z)
@@ -783,55 +784,82 @@ class Effect:
     Effects influence Field of View (fov) -> Smoke blocks sight, Wind blocks shooting etc.
     Effects may genearte a Sprite with the same effectnumber for reference
     """
+    pictures = [] # for animation
+    anim_cycle = 2 # pictures per second
 
-    def __init__(self, x, y, age = 0, max_age = None, dx=0, dy=0):
+    @classmethod
+    def create_pictures(cls):
+        pass
+
+    def __init__(self, tx, ty, age = 0, max_age = None, dx=0, dy=0):
         self.number = Game.effectnumber
         Game.effectnumber += 1
         Game.effects[self.number] = self
-        self.x = x
-        self.y = y
-        self.dx, self.dy = dx, dy
-        self.born = Game.turn_number + age         # effect appears as soon as age reach 0
-        self.age = Game.turn_number - self.born
+        self.background = pygame.Surface((Viewer.gridsize[0], Viewer.gridsize[1])) # background rect from Viewer
+        self.tx = tx # tile x
+        self.ty = ty # tile y
+        self.px, self.py = 0, 0 # pixel coordinate of topleft corner
+        self.fov = False
+        self.dx, self.dy = dx, dy # delta movement in tiles per turn
+        #self.born = Game.turn_number + age         # effect appears as soon as age reach 0
+        #self.age = Game.turn_number - self.born   #
+        self.age = age # age in turns
+        self.seconds = 0 # age in seconds
         self.max_age = max_age # effect disappears when age reaches max_age +1
         self.destroy = False
+        self.kill_on_contact_with_wall = True
         self.char = "?"
         self.text = "unknown effect"
         self.fgcolor = (25,25,25)
-
-
-
+        self.light_radius = 0 # if > 0 then the effect itself emits light (flame, fireball etc)
 
     def next_turn(self):
-        self.age = Game.turn_number - self.born
+        #self.age = Game.turn_number - self.born
+        self.age += 1
+        #if self.max_age is not None and self.age > self.max_age:
         if self.max_age is not None and self.age > self.max_age:
             self.destroy = True
-        self.x += self.dx
-        self.y += self.dy
+        self.tx += self.dx
+        self.ty += self.dy
         # kill when effects leave level limit
         #print("level:", len(Game.dungeon[Game.player.z][0]), "x", len(Game.dungeon[Game.player.z]) )
-        if self.x < 0 or self.x >= len(Game.dungeon[Game.player.z][0]):
+        if self.tx < 0 or self.tx >= len(Game.dungeon[Game.player.z][0]):
             self.destroy = True
-        if self.y < 0 or self.y >= len(Game.dungeon[Game.player.z]):
+        if self.ty < 0 or self.ty >= len(Game.dungeon[Game.player.z]):
             self.destroy = True
         # kill when effect reaches a wall
-        try:
-            in_wall =  isinstance(Game.dungeon[Game.player.z][self.y][self.x], Wall)
-        except IndexError:
-            in_wall = True
-        if in_wall:
-            self.destroy = True
+        if self.kill_on_contact_with_wall:
+            try:
+                in_wall =  isinstance(Game.dungeon[Game.player.z][self.ty][self.tx], Wall)
+            except IndexError:
+                in_wall = True
+            if in_wall:
+                self.destroy = True
+
+    def fovpicture(self, delta_t):
+        """like sprite update -> expect time pased since last frame in seconds"""
+        pics = len(self.pictures)
+        if pics == 0:
+            return None
+        self.seconds += delta_t
+        i = int(self.seconds / (1/self.anim_cycle)  % self.anim_cycle)
+        return self.pictures[i]
+
 
 class Fire(Effect):
 
-    def __init__(self, x, y, age = 0, max_age = None, dx=0, dy=0):
-        super().__init__(x, y, age , max_age, dx, dy)
-        self.char = "*"
-        self.text = "Fire"
-        self.fgcolor = (255,0,0)
-        #print("Fire instance born @ ",x,y)
-        SpriteEffect(effectnumber = self.number,
-                     pictures=[Viewer.images["flame1"], Viewer.images["flame2"], Viewer.images["flame3"]])
+    char = "*"
+    text = "Fire"
+
+    @classmethod
+    def create_pictures(cls):
+        """star changes color wildley between red and yellow"""
+        colorvalues = [i for i in range(128,256)]
+        random.shuffle(colorvalues)
+        for c in colorvalues:
+            Fire.pictures.append(make_text(Fire.char, font_color=(255,c,0), font_size=48, gridsize=Viewer.gridsize)[0])
+
+
 
 
 class Water(Effect):
@@ -1333,11 +1361,12 @@ class Viewer:
         # image for structure tiles ( wall ) -> iterate over all subclasses of Structure and call cls.create_pictures()
         for sc in Structure.__subclasses__():
             sc.create_pictures()
-        #Wall.create_pictures() # fill picture dict in the wall class
-        #Door.create_pictures()
-        #StairUp.create_pictures()
-        #StairDown.create_pictures()
-        # Floor does not need pictures
+        # image creation for Effects:
+        #print("creating effect pictures..")
+        for sc in Effect.__subclasses__():
+            #print(sc)
+            sc.create_pictures()
+
 
     def make_radar(self):
         self.radarscreen.fill((0,0,0)) # fill black
@@ -1405,7 +1434,7 @@ class Viewer:
         Viewer.playergroup  = pygame.sprite.OrderedUpdates() # a group maintaining order in list
         Viewer.cursorgroup = pygame.sprite.Group()
         Viewer.flygroup = pygame.sprite.Group()
-        Viewer.effectgroup = pygame.sprite.Group() # dirtygroup?
+        #Viewer.effectgroup = pygame.sprite.Group() # dirtygroup?
         #self.bulletgroup = pygame.sprite.Group() # simple group for collision testing only
         #self.tracergroup = pygame.sprite.Group()
         #self.mousegroup = pygame.sprite.Group()
@@ -1418,7 +1447,7 @@ class Viewer:
         #Beam.groups = self.allgroup, self.bulletgroup
         TileCursor.groups = self.cursorgroup
         VectorSprite.groups = self.allgroup
-        SpriteEffect.groups =  self.effectgroup
+        #SpriteEffect.groups =  self.effectgroup
         Bubble.groups = self.allgroup, self.fxgroup # special effects
         Flytext.groups = self.allgroup, self.flytextgroup
         FlyingObject.groups = self.allgroup, self.flygroup
@@ -1506,7 +1535,9 @@ class Viewer:
             return (dtpx, dtpy)
 
     def paint_tiles(self):
-        #print("effecs:", Game.effects)
+        #print("effecs:", Game.effects) # destroyed effects are removed in calculate_fov -> process_effects
+        for e in Game.effects.values():
+            e.fov = False  # clear old fov information
         z = Game.player.z
         dungeon = Game.dungeon[z]
         tiles_x = len(Game.dungeon[0][0]) # z y x
@@ -1552,12 +1583,20 @@ class Viewer:
                             self.screen.blit(char, (x, y))  # blit from topleft corner
                             break # no more than one monster per tile
                     # always paint effect, if necessary paint effect OVER monster
-                    for e in Game.effects.values():
-                        if e.x == tx and e.y == ty and e.age >=0:
-                            #print("effect:", e, e.char, e.age, e.max_age)
-                            if e.char is not None: # set char to None if an Effectsprite exist for this effect
-                                char = make_text(e.char, font_color=e.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
-                                self.screen.blit(char, (x, y))  # blit from topleft corner
+                    # calculate effect animation coordinates and fov ( effect will be painted in Viewer.run
+
+                    for e in [e for e in Game.effects.values() if e.tx == tx and e.ty == ty and e.age >=0 ]:
+                            e.fov = True
+                            e.px, e.py = x, y
+
+
+                            # no break because multiple effects per tile are possible
+                            # blitting of effect will be done in Viewer.paint_animation
+
+                    #        #print("effect:", e, e.char, e.age, e.max_age)
+                    #        if e.char is not None: # set char to None if an Effectsprite exist for this effect
+                    #            char = make_text(e.char, font_color=e.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
+                    #            self.screen.blit(char, (x, y))  # blit from topleft corner
                     if monstercounter == 0:
                         # monster is blocking items
                         itemcounter = 0
@@ -1577,8 +1616,29 @@ class Viewer:
                             if pic is not None:
                                 #print(pic,x,y)
                                 self.screen.blit(pic, (x, y))  # blit from topleft corner
+
+                    # save screenrect background for effect at this place
+                    for e in [e for e in Game.effects.values() if e.tx == tx and e.ty == ty and e.age >= 0]:
+                        # blit:
+                        # where to blit ( what to blit, (where on dest topleftxy), (rect-area of source to blit )
+                        e.background.blit(self.screen, (0,0), (e.px,e.py,Viewer.gridsize[0], Viewer.gridsize[1]))
                 # paint grid rect
                 pygame.draw.rect(self.screen, (128,128,128), (x,y,Viewer.gridsize[0], Viewer.gridsize[1]),1 )
+
+    def paint_animation(self, seconds):
+        """update animated tiles (effects) between player turns
+           all visible effects have .fov set to True (done by self.paint_tiles)
+           and all visible effects have already .px and .py for topleft corner in pixel (also by self.paint_tiles)
+           seconds is time passed since last frame (from Viewer.run)
+           """
+        for e in [e for e in Game.effects.values() if e.fov]:
+            # blit first backup screen from last frame (without sprites/effects)
+            #self.screen.blit(self.screen_backup, (e.px, e.py), (0,0,Viewer.gridsize[0], Viewer.gridsize[1]))
+
+            self.screen.blit(e.background, (e.px, e.py))
+            # blit effect picture on top
+            self.screen.blit(e.fovpicture(seconds), (e.px+random.randint(-5,5),e.py+random.randint(-5,5)))
+
 
 
     def panelinfo(self):
@@ -1601,7 +1661,7 @@ class Viewer:
             else:
                 text = tile.__class__.__name__
         if tile.fov:
-            for e in [e for e in Game.effects.values() if e.x == tx and e.y == ty and e.age >= 0]:
+            for e in [e for e in Game.effects.values() if e.tx == tx and e.ty == ty and e.age >= 0]:
                 effects.append(e)
             for i in [i for i in Game.items.values() if not i.backpack and i.z == hero.z and i.x == tx and i.y == ty]:
                 items.append(i)
@@ -1636,13 +1696,15 @@ class Viewer:
         hero =Game.player
         #pygame.mouse.set_visible(False)
         oldleft, oldmiddle, oldright = False, False, False
-        pygame.display.set_caption("pipe_rogue: effectgroup {}".format(len(self.effectgroup)))
+        pygame.display.set_caption("pipe_rogue version:".format(version))
         Flytext(pos=pygame.math.Vector2(Viewer.width//2,Viewer.height//2), text="Enjoy pipe_rogue!", fontsize=48,
                 max_age = 3)
         #Flytext(text="press h for help", age=-2)
+        #self.screen_backup = self.screen.copy()
         # --------extra effects at start of game --------------
         Fire(3,1, max_age=5)
         Fire(3,2, max_age=7)
+        Fire(1,2, max_age=10)
         while running:
             #print(pygame.mouse.get_pos(), Viewer.pixel_to_tile(pygame.mouse.get_pos()))
             #print(self.playergroup[0].pos, self.playergroup[0].cannon_angle)
@@ -1736,22 +1798,19 @@ class Viewer:
                 self.make_radar()
                 self.make_panel()
                 self.make_log()
+                ##pygame.display.flip() # bad idea
                 self.screen_backup = self.screen.copy()
             else:
-                #for cs in self.cursorgroup:
-                 #   print(self.cursorgroup)
-                    #cs.clear(self.screen, self.screen_backup)
                  self.cursorgroup.clear(self.screen, self.screen_backup)
-                 self.effectgroup.clear(self.screen, self.screen_backup)
             self.screen.blit(self.panelscreen, (Viewer.width - Viewer.panelwidth, Viewer.panelwidth))
             self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth,0))
             self.screen.blit(self.logscreen, (0, Viewer.height - Viewer.logheight))
+            # ---- clear old effect, paint new effects ----
+            self.paint_animation(seconds)
             # ---- update panel with help for tile on cursor -----
             if not cursormode:
                 self.panelinfo()
 
-            # ---- testing cursor
-            #print("Cursor at:", Viewer.pixel_to_tile(pygame.mouse.get_pos()))
 
 
             # -------------- special effect after cusormode selection -------
@@ -1771,7 +1830,7 @@ class Viewer:
 
             # ---- update -----------------
             self.allgroup.update(seconds)
-            self.effectgroup.update(seconds)
+            #self.effectgroup.update(seconds)
             #print("has:",self.allgroup.has(self.cursor))
             #if cursormode:
             self.cursorgroup.update(seconds)
@@ -1798,7 +1857,7 @@ class Viewer:
             # ----------- draw  -----------------
             self.allgroup.draw(self.screen)
             #if cursormode:
-            self.effectgroup.draw(self.screen)
+            #self.effectgroup.draw(self.screen)
 
             self.cursorgroup.draw(self.screen)
             # write text below sprites
@@ -1933,6 +1992,8 @@ def make_text(text="@", font_color=(255, 0, 255), font_size=48, font_name = "mon
             mytext = pygame.transform.scale(mytext, gridsize)
         except:
             raise ValueError("grid size must be tuple of positive integers")
+        #if font_color != (0,0,0):
+        #    mytext.set_colorkey((0,0,0,))
         mytext = mytext.convert_alpha()  # pygame surface, use for blitting
         return mytext, (gridsize[0], gridsize[1])
 
@@ -2036,16 +2097,18 @@ level1 = """
 #.$$.M.......#.#....#...ff..#...$....#
 ######################################"""
 
+# insert in level2: W for Waterguy, S for Skydragon
+
 level2 = """
 #################################################################
 #..<............................................................#
 #...............................................................#
 #...............................................................#
 #...............................................................#
-#........W......##d###..........................................#
+#...............##d###..........................................#
 #...............#....#..........................................#
 #...............#....d..........................................#
-#...............#.S..##............D..................D.........#
+#...............#....##............D..................D.........#
 #...............#.....#.........................................#
 #.kk.k.k........d.....##........................................#
 #...............###d####........................................#
