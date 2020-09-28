@@ -1126,69 +1126,108 @@ class StairUp(Structure):
         return StairUp.fovpic
 
 class Item:
-    """Items can be picked up by the player"""
+    """Items can be picked up by the player
+    if carried by player, the items x,y,z attributes are meaningless
+    and the items backpack attribute must be set to True"""
+
+    pictures = []
+    char = "?"  # for panelinfo
+    fgcolor = (0,255,0) # for panelinfo
+
+    @classmethod
+    def create_pictures(cls):
+        pass
 
     def __init__(self, x, y, z):
         self.number = Game.itemnumber
         Game.itemnumber += 1
         Game.items[self.number] = self
         self.backpack = False  # carried in players backpack?
-        self.fgcolor = (0,255,0)
-        self.x = x
+        self.x = x  # if not carried by player
         self.y = y
         self.z = z
 
+    def flytext_and_bubbles(self, ftext=None, number_of_bubbles=None):
+        if ftext is None:
+            ftext = self.__class__.__name__
+        if number_of_bubbles is None:
+            number_of_bubbles = 5
+        px, py = Viewer.tile_to_pixel((self.x, self.y))
+        posvector = pygame.math.Vector2(px, py)
+        Flytext(pos=posvector,
+                move=pygame.math.Vector2(0, -20), text=ftext, color=self.fgcolor, fontsize=25)
+        for _ in range(number_of_bubbles):
+            posvector = pygame.math.Vector2(px, py)  # its necessary. comment out this line for funny effect
+            m = pygame.math.Vector2(random.random() * 20 + 25) # speed
+            m.rotate_ip(random.randint(0, 360))
+            # x,y = Viewer.tile_to_pixel((self.x,self.y))
+            Bubble(pos=posvector, color=self.fgcolor,
+                   move=m)
+
     def pickupeffect(self):
-        pass # pygame code for effect when item is picked up by player
+        self.flytext_and_bubbles()
+
+    def fovpicture(self):
+        return self.pictures[0]
+
 
 
 class Coin(Item):
 
+    pictures = []
+    char = "$"
+    fgcolor = (255,255,0) # yellow
+
+    @classmethod
+    def create_pictures(cls):        # yellow circle, inside text with $ symbol
+        pic = pygame.Surface((Viewer.gridsize[0], Viewer.gridsize[1]))
+        pic.set_colorkey((0,0,0)) # black is transparent
+        half_width = Viewer.gridsize[0]//2
+        half_height = Viewer.gridsize[1]//2
+        radius = min(half_width, half_height)
+        pygame.draw.circle(pic, cls.fgcolor, (half_width,half_height), radius)
+        symbol = make_text(cls.char, (255,0,255),gridsize=(Viewer.gridsize[0],Viewer.gridsize[1]))[0]
+        pic.blit(symbol, (0,0))
+        pic.convert_alpha()
+        cls.pictures.append(pic)
+
+
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
-        self.char = "$"
-        self.fgcolor = (255,255,0) # yellow
         self.value = random.choice((1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 5, 5, 10))
 
-    def pickupeffect(self ):
-        for bubblesprite in range(self.value):
-            m = pygame.math.Vector2(random.random()*20+25)
-            m.rotate_ip(random.randint(0,360))
-            x,y = Viewer.tile_to_pixel((self.x,self.y))
-            Bubble(pos=pygame.math.Vector2(x,y), color=self.fgcolor,
-                   move=m)
-
+    def pickupeffect(self):
+        self.flytext_and_bubbles(ftext=f"found {self.value} gold!", number_of_bubbles=self.value*5)
 
 
 class Key(Item):
-    def __init__(self, x, y, z):
-        super().__init__(x, y, z)
-        self.fgcolor = (255,255,255) # "white"
-        self.char = "k"
 
-    def pickupeffect(self ):
-        for _ in range(1):
-            m = pygame.math.Vector2(random.random()*10+5, 0)
-            m.rotate_ip(-90)
-            #print("key bubble vector:", m)
-            x,y = Viewer.tile_to_pixel((self.x,self.y))
-            Bubble(pos=pygame.math.Vector2(x,y), move=m, color = self.fgcolor)
+    pictures = []
+    fgcolor = (255,255,255)
+    char = "k"
 
+    @classmethod
+    def create_pictures(cls):
+        cls.pictures.append(Viewer.images["key"])
 
 class Food(Item):
 
+    pictures = []
+    char = "f"
+
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
-        self.char = "f"
         self.food_value = random.randint(1, 3)
 
-    def pickupeffect(self ):
-        for bubblesprite in range(self.food_value):
-            m = pygame.math.Vector2(random.random()*20+25)
-            m.rotate_ip(random.randint(0,360))
-            x,y = Viewer.tile_to_pixel((self.x,self.y))
-            Bubble(pos=pygame.math.Vector2(x,y), color=self.fgcolor,
-                   move=m)
+    @classmethod
+    def create_pictures(cls):
+        cls.pictures.append(Viewer.images["food"])
+
+    def pickupeffect(self):
+        lookup = {1: "edible food",
+                  2: "good food",
+                  3: "fantastic food"}
+        self.flytext_and_bubbles(lookup[self.food_value], self.food_value*5)
 
 
 class Monster():
@@ -1400,6 +1439,9 @@ class Viewer:
         #print("creating effect pictures..")
         for sc in Effect.__subclasses__():
             #print(sc)
+            sc.create_pictures()
+
+        for sc in Item.__subclasses__():
             sc.create_pictures()
 
 
@@ -1623,38 +1665,28 @@ class Viewer:
                     for e in [e for e in Game.effects.values() if e.tx == tx and e.ty == ty and e.age >=0 ]:
                             e.fov = True
                             e.px, e.py = x, y
-
-
                             # no break because multiple effects per tile are possible
-                            # blitting of effect will be done in Viewer.paint_animation
-
-                    #        #print("effect:", e, e.char, e.age, e.max_age)
-                    #        if e.char is not None: # set char to None if an Effectsprite exist for this effect
-                    #            char = make_text(e.char, font_color=e.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
-                    #            self.screen.blit(char, (x, y))  # blit from topleft corner
+                            # blitting of effect will be done in Viewer.paint_animation because all effects have animations
                     if monstercounter == 0:
                         # monster is blocking items
                         itemcounter = 0
-                        for item in Game.items.values():
-                            if (item.z == z and item.y == ty and item.x == tx  and not item.backpack):
-                                itemcounter += 1
-                                char = make_text(item.char, font_color=item.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
+                        items = [i for i in Game.items.values() if i.z == z and i.y == ty and i.x == tx  and not i.backpack]
+                        itemcounter = len(items)
                         if itemcounter > 1:
+                            # blit 'infinite' symbol if more than one items are at one tile
                             char = make_text("\u221E", font_color=(255,200,50), font_size=48, gridsize=Viewer.gridsize)[0] # infinity sign
                             self.screen.blit(char, (x, y))  # blit from topleft corner
                         elif itemcounter == 1:
-                            self.screen.blit(char, (x, y))  # blit from topleft corner
+                            #self.screen.blit(char, (x, y))  # blit from topleft corner
+                            self.screen.blit(items[0].fovpicture(), (x,y))
                         elif itemcounter == 0:
-                            #char = make_text(tile.char, font_color=tile.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
                             # paint the structure pic
                             pic = tile.fovpicture()
                             if pic is not None:
-                                #print(pic,x,y)
                                 self.screen.blit(pic, (x, y))  # blit from topleft corner
 
                     # save screenrect background for effect at this place
                     for e in [e for e in Game.effects.values() if e.tx == tx and e.ty == ty and e.age >= 0]:
-                        # blit:
                         # where to blit ( what to blit, (where on dest topleftxy), (rect-area of source to blit )
                         e.background.blit(self.screen, (0,0), (e.px,e.py,Viewer.gridsize[0], Viewer.gridsize[1]))
                 # paint grid rect
