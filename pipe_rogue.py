@@ -329,50 +329,6 @@ class FlyingObject(VectorSprite):
         self.angle = -m.angle_to(pygame.math.Vector2(1,0))
 
 
-
-class SpriteEffect(VectorSprite):
-    """expect effectnumber as parameter to connect it to the corresponding effect in Game.effects
-       expect pictures ( -> list of pygame image objects )"""
-    def _overwrite_parameters(self):
-        self.seconds_per_frame = .2 # how many seconds to wait before changing ti bext picture
-        self.old_time = 0
-        self.i = 0
-        self.picture = self.pictures[0]
-
-    def update(self, seconds):
-        # get tile from corresponding effect
-        if self.effectnumber not in Game.effects:
-            self.kill()
-            return
-        e = Game.effects[self.effectnumber]
-        tx, ty = e.x, e.y
-        # in invisible tile?
-        if not Game.dungeon[Game.player.z][ty][tx].fov:
-            self.visible = False
-            return #
-        if not Viewer.toplefttile[0] <= tx <= Viewer.bottomrighttile[0]:
-            #self.visible = False
-            return # do not draw because tile is not currently on screen
-        if not Viewer.toplefttile[1] <= ty <= Viewer.bottomrighttile[1]:
-            #self.visible = False
-            return
-        #self.visible = True
-        x,y = Viewer.tile_to_pixel((tx,ty))
-        self.pos = pygame.math.Vector2(x,y)
-        #----
-        self.old_time += seconds               # TODO: better code for animcycle
-        if self.old_time > self.seconds_per_frame:
-            self.old_time = 0
-            self.i += 1
-            if self.i > len(self.pictures) - 1:
-                self.i = 0
-            self.picture = self.pictures[self.i]
-            self.create_image()
-        super().update(seconds)
-
-
-
-
 class Bubble(VectorSprite):
     """a round fragment or bubble particle"""
 
@@ -785,7 +741,8 @@ class Effect:
     Effects may genearte a Sprite with the same effectnumber for reference
     """
     pictures = [] # for animation
-    anim_cycle = 2 # pictures per second
+    anim_cycle = 6 # how many pictures per second the animation should display
+    wobble = False  # if effect dances around center of tile each frame some pixel. can be False or Tuple(x,y)
 
     @classmethod
     def create_pictures(cls):
@@ -807,10 +764,10 @@ class Effect:
         self.seconds = 0 # age in seconds
         self.max_age = max_age # effect disappears when age reaches max_age +1
         self.destroy = False
-        self.kill_on_contact_with_wall = True
-        self.char = "?"
-        self.text = "unknown effect"
-        self.fgcolor = (25,25,25)
+        self.kill_on_contact_with_wall = True # when effects wanders around and hit a wall-Destroy
+        #self.char = "?"
+        #self.text = "unknown effect"
+        #self.fgcolor = (25,25,25)
         self.light_radius = 0 # if > 0 then the effect itself emits light (flame, fireball etc)
 
     def next_turn(self):
@@ -837,46 +794,124 @@ class Effect:
                 self.destroy = True
 
     def fovpicture(self, delta_t):
-        """like sprite update -> expect time pased since last frame in seconds"""
-        pics = len(self.pictures)
+        """like sprite update -> expect time pased since last frame in seconds
+           returns one of the pictures in self.pictures to update the animation"""
+        pics = len(self.pictures)  # bacuase of scope, this works for classvariables of subclasses
         if pics == 0:
             return None
         self.seconds += delta_t
-        i = int(self.seconds / (1/self.anim_cycle)  % self.anim_cycle)
+        i = int(self.seconds / (1 / self.anim_cycle) % pics) #
         return self.pictures[i]
 
 
 class Fire(Effect):
 
+    pictures =  []
     char = "*"
-    text = "Fire"
+    wobble = (3,3)
+    #text = "Fire"
+    fgcolor = (255,0,0) # for panelinfo
 
     @classmethod
     def create_pictures(cls):
         """star changes color wildley between red and yellow"""
-        colorvalues = [i for i in range(128,256)]
+        colorvalues = list(range(128,256,16))
         random.shuffle(colorvalues)
         for c in colorvalues:
             Fire.pictures.append(make_text(Fire.char, font_color=(255,c,0), font_size=48, gridsize=Viewer.gridsize)[0])
 
+    #def __init__(self, tx, ty, age = 0, max_age = None, dx=0, dy=0 ):
+    #    super().__init__(tx, ty, age, max_age, dx, dy)
+    #    self.char = "*"
+    #    self.text = "Fire"
+    #    self.fgcolor = (255,0,0)
 
 
 
 class Water(Effect):
 
-    def __init__(self, x, y, age=0, max_age=None, dx=0, dy=0):
-        super().__init__(x, y, age, max_age, dx, dy )
-        self.char = "~"
-        self.text = "Water"
-        self.fgcolor = (0, 0, 255)
+    pictures = []
+    char = "~"
+    fgcolor = (0,0,255)
+
+    @classmethod
+    def create_pictures(cls):
+        colorvalues = list(range(128, 256, 16))
+        colorvalues.extend(list(range(255, 127, -16)))
+        for c in colorvalues:
+            pic = make_text(Water.char, font_color=(0,0,c), font_size=48, gridsize=Viewer.gridsize)[0]
+            if c%2 == 0: #the first half values (ascending)
+                Water.pictures.append(pic)
+            else:        # the second half (descending)            x     y
+                Water.pictures.append(pygame.transform.flip(pic, False, True))
+
+
+    #def __init__(self, x, y, age=0, max_age=None, dx=0, dy=0):
+    #    super().__init__(x, y, age, max_age, dx, dy )
+    #    self.char = "~"
+    #    self.text = "Water"
+    #    self.fgcolor = (0, 0, 255)
 
 class Flash(Effect):
 
-    def __init__(self, x, y, age=0, max_age=None, dx=0, dy=0):
-        super().__init__(x, y, age, max_age, dx, dy )
-        self.char = "/"
-        self.text = "Flash"
-        self.fgcolor = (0, 0, 200)
+    pictures = [] # necessary!
+    char = "/"
+    fgcolor = (0,200,200) # cyan
+    anim_cycle = 20 # so many pictures per second
+
+    @classmethod
+    def create_pictures(cls):
+        """create a spiderweb of withe-blue lines, cracling from the center of tile to it's edge"""
+        corners = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)) # sides without middle
+        for i in range(60): # 20 fps -> 3 seconds long a new picture for each frame
+            branches = random.randint(1,3)
+            for b in range(branches):
+                start = random.choice(corners)
+                end = (-start[0], -start[1])  # jumping the middle - find vis a vis corner
+                i = corners.index(end)
+                try:
+                    end = corners[i + random.randint(-1,1)]
+                except IndexError:
+                    end = (-start[0], -start[1])
+                pic = pygame.Surface((Viewer.gridsize[0],Viewer.gridsize[1]))
+                pic.set_colorkey((0,0,0)) # black is transparent
+                # wobble
+                center = (random.randint(-5,5), random.randint(-5,5))
+                corner1 = (random.randint(-5,5), random.randint(-5,5))
+                corner2 = (random.randint(-5, 5), random.randint(-5, 5))
+                thickness_white = random.randint(1,4)
+                thickness_blue = random.randint(2,6)
+                blue = (0,0, random.randint(200,255))
+                w = random.randint(200,255)
+                white = (w,w,w)
+                pygame.draw.line(pic, blue, (start[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2+corner1[0],
+                                             start[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2+corner1[1]),
+                        (Viewer.gridsize[0]//2+center[0],Viewer.gridsize[1]//2+center[1]),
+                        thickness_blue+thickness_white)
+                pygame.draw.line(pic, white, (start[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2  + corner1[0],
+                                              start[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner1[1]),
+                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
+                                 thickness_white)
+                pygame.draw.line(pic, blue, (end[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2 + corner2[0],
+                                             end[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner2[1]),
+                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
+                                 thickness_blue + thickness_white)
+                pygame.draw.line(pic, white, (end[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2 + corner2[0],
+                                              end[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner2[1]),
+                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
+                                 thickness_white)
+            pic.convert_alpha()
+            cls.pictures.append(pic)
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1637,7 +1672,13 @@ class Viewer:
 
             self.screen.blit(e.background, (e.px, e.py))
             # blit effect picture on top
-            self.screen.blit(e.fovpicture(seconds), (e.px+random.randint(-5,5),e.py+random.randint(-5,5)))
+            if e.wobble:  # e.wobble is either False or a xy tuple
+                wobble_x = random.randint(-e.wobble[0], e.wobble[0])
+                wobble_y = random.randint(-e.wobble[1], e.wobble[1])
+            else:
+                wobble_x = 0
+                wobble_y = 0
+            self.screen.blit(e.fovpicture(seconds), (e.px+wobble_x, e.py+wobble_y))
 
 
 
@@ -1705,6 +1746,8 @@ class Viewer:
         Fire(3,1, max_age=5)
         Fire(3,2, max_age=7)
         Fire(1,2, max_age=10)
+        Water(4,1, max_age=10)
+        Water(5,1, max_age=10)
         while running:
             #print(pygame.mouse.get_pos(), Viewer.pixel_to_tile(pygame.mouse.get_pos()))
             #print(self.playergroup[0].pos, self.playergroup[0].cannon_angle)
@@ -1800,6 +1843,11 @@ class Viewer:
                 self.make_log()
                 ##pygame.display.flip() # bad idea
                 self.screen_backup = self.screen.copy()
+                # testing...
+                #for x, i in enumerate(Flash.pictures):
+                #    self.screen.blit(i, (x * Viewer.gridsize[0], 20))
+                #    #input("...")
+
             else:
                  self.cursorgroup.clear(self.screen, self.screen_backup)
             self.screen.blit(self.panelscreen, (Viewer.width - Viewer.panelwidth, Viewer.panelwidth))
@@ -1974,7 +2022,6 @@ def calculate_line(start, end, z, modus="all"):
 # ----------------
 
 
-
 def make_text(text="@", font_color=(255, 0, 255), font_size=48, font_name = "mono", bold=True, gridsize=None):
     """returns pygame surface with text and x, y dimensions in pixel
        gridsize must be None or a tuple with positive integers.
@@ -1998,8 +2045,6 @@ def make_text(text="@", font_color=(255, 0, 255), font_size=48, font_name = "mon
         return mytext, (gridsize[0], gridsize[1])
 
     return mytext, (size_x, size_y)
-
-
 
 def fight(a, b):
     """dummy function, does nothing yet"""
@@ -2033,9 +2078,6 @@ def between(value, min=0, max=255 ):
     return 0 if value < min else max if value > max else value
 
 # generic pygame functions
-
-
-
 
 def write(background, text, x=50, y=150, color=(0, 0, 0),
           font_size=None, font_name="mono", bold=True, origin="topleft"):
@@ -2106,8 +2148,8 @@ level2 = """
 #...............................................................#
 #...............................................................#
 #...............##d###..........................................#
-#...............#....#..........................................#
-#...............#....d..........................................#
+#.....W.........#....#..........................................#
+#...............#..S.d..........................................#
 #...............#....##............D..................D.........#
 #...............#.....#.........................................#
 #.kk.k.k........d.....##........................................#
@@ -2117,27 +2159,6 @@ level2 = """
 #...............................................................#
 #################################################################"""
 
-
-# lookup2: [4crossneighbors] -> box tile unicode
-# the look of a wall tile in the dungeon depends on its up to 4 neighboring wall tiles (in cardinal directions)
-# have tile  north east south west
-lookup2 = {(True, False, True, False): "\u2551",  # vertical
-           (False, True, False, True): "\u2550",  # horizontal
-           (False, True, True, False): "\u2554",  # L east-south
-           (False, False, True, True): "\u2557",  # L south-west
-           (True, True, False, False): "\u255A",  # L north-east
-           (True, False, False, True): "\u255D",  # L north-west
-           (True, True, True, False): "\u2560",  # T without west
-           (True, False, True, True): "\u2563",  # T without east
-           (False, True, True, True): "\u2566",  # T without north
-           (True, True, False, True): "\u2569",  # T without south
-           (True, True, True, True): "\u256C",  # crossing
-           (False, False, False, False): "\u25A3",  # no neighbors
-           (False, False, True, False): "\u2565",  # terminate from south
-           (False, False, False, True): "\u2561",  # terminate from west
-           (False, True, False, False): "\u255E",  # terminate from east
-           (True, False, False, False): "\u2568",  # terminate from north
-           }
 
 
 if __name__ == '__main__':
