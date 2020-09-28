@@ -20,7 +20,7 @@ graphics mostly from Dungeon Crawl: http://crawl.develz.org/
 unicode tables:
 # https://unicode.org/charts/PDF/U2600.pdf
 # https://en.wikibooks.org/wiki/Unicode/Character_reference/2000-2FFF
-
+# useful: 3stars: \u2042
 # pycharm colorpicker: alt+enter+c
 
 """
@@ -831,8 +831,9 @@ class Fire(Effect):
 class Water(Effect):
 
     pictures = []
-    char = "~"
+    char = "\u2248" # double wave instead of "~"
     fgcolor = (0,0,255)
+    anim_cycle = 4
 
     @classmethod
     def create_pictures(cls):
@@ -1180,16 +1181,17 @@ class Coin(Item):
 
     @classmethod
     def create_pictures(cls):        # yellow circle, inside text with $ symbol
-        pic = pygame.Surface((Viewer.gridsize[0], Viewer.gridsize[1]))
-        pic.set_colorkey((0,0,0)) # black is transparent
-        half_width = Viewer.gridsize[0]//2
-        half_height = Viewer.gridsize[1]//2
-        radius = min(half_width, half_height)
-        pygame.draw.circle(pic, cls.fgcolor, (half_width,half_height), radius)
-        symbol = make_text(cls.char, (255,0,255),gridsize=(Viewer.gridsize[0],Viewer.gridsize[1]))[0]
-        pic.blit(symbol, (0,0))
-        pic.convert_alpha()
-        cls.pictures.append(pic)
+        #pic = pygame.Surface((Viewer.gridsize[0], Viewer.gridsize[1]))
+        #pic.set_colorkey((0,0,0)) # black is transparent
+        #half_width = Viewer.gridsize[0]//2
+        #half_height = Viewer.gridsize[1]//2
+        #radius = min(half_width, half_height)
+        #pygame.draw.circle(pic, cls.fgcolor, (half_width,half_height), radius)
+        symbol = make_text(cls.char, (255,255,0),gridsize=(Viewer.gridsize[0],Viewer.gridsize[1]))[0]
+        #pic.blit(symbol, (0,0))
+        #pic.convert_alpha()
+        #cls.pictures.append(pic)
+        cls.pictures.append(symbol)
 
 
     def __init__(self, x, y, z):
@@ -1233,6 +1235,15 @@ class Food(Item):
 class Monster():
     """Monsters can move around"""
 
+    pictures = []
+    fgcolor = (255,0,0) # red
+    char = "M"
+
+    @classmethod
+    def create_pictures(cls):
+        pic = make_text(cls.char, cls.fgcolor, gridsize=Viewer.gridsize)[0]
+        cls.pictures.append(pic)
+
     def __init__(self, x, y, z):
         self.number = Game.monsternumber  # get unique monsternumber
         Game.monsternumber += 1  # increase global monsternumber
@@ -1240,25 +1251,31 @@ class Monster():
         self.x = x
         self.y = y
         self.z = z
-        self.hp = 10
-        self.fgcolor = (255,0,0)# "red"
+        self.hp = 10 # this MUST be an instance attribute because each monster has individual hp
+        #self.fgcolor = (255,0,0)# "red"
         self.friendly = False  # friendly towards player?
-        self.char = "M"  # Monster
+        #self.char = "M"  # Monster
 
     def ai(self):
         dx = random.choice((0, 0, 0, 1, -1,))
         dy = random.choice((0, 0, 0, 1, -1,))
         return dx, dy
 
+    def fovpicture(self):
+        #print("returning fovpicture of", self.__class__.__name__)
+        return self.pictures[0]
+
 
 class Dragon(Monster):
+
+    pictures =[]
+    fgcolor = (255,90,0) # orange
+    char = "D"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
-        self.fgcolor = (255, 90, 0)  # "orange"
         self.friendly = False  # friendly towards player?
-        self.char = "D"  # Dragon
 
     def ai(self):
         # ---fire spitting---
@@ -1279,12 +1296,14 @@ class Dragon(Monster):
 
 class SkyDragon(Monster):
 
+    pictures = []
+    fgcolor = (0,0,200) # cyan
+    char = "S"
+
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
-        self.fgcolor = (0, 0, 200)  # "orange"
         self.friendly = False  # friendly towards player?
-        self.char = "S"  # SkyDragon
 
     def ai(self):
         # ---fire spitting---
@@ -1304,12 +1323,14 @@ class SkyDragon(Monster):
 
 class Waterguy(Monster):
 
+    pictures = []
+    fgcolor = (0,0,255) # blue
+    char = "W"
+
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 25
-        self.fgcolor = (0, 0, 255)  # "blue"
         self.friendly = False  # friendly towards player?
-        self.char = "W"  # Waterguy
 
     def ai(self):
         # ---water spitting---
@@ -1329,12 +1350,14 @@ class Waterguy(Monster):
 
 
 
-
 class Player(Monster):
+
+    pictures = []
+    char =   "\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
+    fgcolor = (0,0,255)
+
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
-        self.char = "@"
-        self.fgcolor = (0,0,255)#"blue"
         self.hp = 50
         self.friendly = True
         # self.backpack = [] # container for transported items
@@ -1373,7 +1396,7 @@ class Viewer:
 
         # ---- pygame init
         pygame.init()
-        #self.font = pygame.font.Font(os.path.join("game","data", "FreeMonoBold.otf"),32)
+        #Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
         Viewer.fontfile = os.path.join("data", "FreeMonoBold.otf")
 
 
@@ -1443,6 +1466,9 @@ class Viewer:
 
         for sc in Item.__subclasses__():
             sc.create_pictures()
+        for sc in Monster.__subclasses__():
+            sc.create_pictures()
+        Monster.create_pictures()
 
 
     def make_radar(self):
@@ -1653,12 +1679,14 @@ class Viewer:
                     pygame.draw.rect(self.screen, tile.bgcolor, (x,y,Viewer.gridsize[0], Viewer.gridsize[1]))
                     # effect is blocking items, but not monsters
                     monstercounter = 0
-                    for monster in Game.zoo.values():  # ---- check for monster at this location
-                        if monster.z == z and monster.y == ty and monster.x == tx and monster.hp > 0:
-                            monstercounter += 1
-                            char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
-                            self.screen.blit(char, (x, y))  # blit from topleft corner
-                            break # no more than one monster per tile
+                    monsters =  [m for m in Game.zoo.values() if m.z == z and m.y == ty and m.x == tx and m.hp > 0]
+                    monstercounter = len(monsters)
+                    for m in monsters:
+                            #char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
+                        #self.screen.blit(char, (x, y))  # blit from topleft corner
+                        self.screen.blit(m.fovpicture(), (x,y))
+                            #break # no more than one monster per tile
+                    monstercounter = len(monsters)
                     # always paint effect, if necessary paint effect OVER monster
                     # calculate effect animation coordinates and fov ( effect will be painted in Viewer.run
 
@@ -2054,15 +2082,15 @@ def calculate_line(start, end, z, modus="all"):
 # ----------------
 
 
-def make_text(text="@", font_color=(255, 0, 255), font_size=48, font_name = "mono", bold=True, gridsize=None):
+def make_text(text="@", font_color=(255, 0, 255), font_size=48, gridsize=None):
     """returns pygame surface with text and x, y dimensions in pixel
        gridsize must be None or a tuple with positive integers.
        Use gridsize to scale the text to your desired dimension or None to just render it
        You still need to blit the surface.
        Example: text with one char for font_size 48 returns the dimensions 29,49
     """
-    myfont = pygame.font.SysFont(font_name, font_size, bold) # fontname -> Viewer.fontfile ??
-    #myfont = Viewer.fontfile
+    #myfont = pygame.font.SysFont(font_name, font_size, bold) # fontname -> Viewer.fontfile ??
+    myfont = pygame.font.Font(Viewer.fontfile, font_size)
     size_x, size_y = myfont.size(text)
     mytext = myfont.render(text, True, font_color)
     mytext = mytext.convert_alpha() # pygame surface, use for blitting
@@ -2120,8 +2148,8 @@ def write(background, text, x=50, y=150, color=(0, 0, 0),
     """
     if font_size is None:
         font_size = 24
-    font = pygame.font.SysFont(font_name, font_size, bold)
-    #font = pygame.font.Font(Viewer.fontfile, font_size)
+    #font = Viewer.font # pygame.font.SysFont(font_name, font_size, bold)
+    font = pygame.font.Font(Viewer.fontfile, font_size)
     width, height = font.size(text)
     surface = font.render(text, True, color)
 
