@@ -1,5 +1,7 @@
-# improved roguelike, from roguelike-rich but with pygame instead of rich library for graphics
 """
+pipe_rogue
+a playable tutorial about roguelike programming using python3, pygame and other tools
+part of the ThePythonGameBook project, see http://thepythongamebook.com
 author: Horst JENS
 email: horstjens@gmail.com
 contact: see http://spielend-programmieren.at/de:kontakt
@@ -15,13 +17,20 @@ see http://www.roguebasin.com/index.php?title=Comparative_study_of_field_of_view
 field of view improving, removing of artifacts:
 see https://sites.google.com/site/jicenospam/visibilitydetermination
 
-graphics mostly from Dungeon Crawl: http://crawl.develz.org/
+license for media, fonts etc: see /data/imagerights.txt
 
 unicode tables:
 # https://unicode.org/charts/PDF/U2600.pdf
 # https://en.wikibooks.org/wiki/Unicode/Character_reference/2000-2FFF
+# https://en.wikipedia.org/wiki/Box_Drawing_(Unicode_block)
+# https://dejavu-fonts.github.io/
+# defja vu sans: http://dejavu.sourceforge.net/samples/DejaVuSans.pdf
+# deja vu sans mono: http://dejavu.sourceforge.net/samples/DejaVuSansMono.pdf
+
 # useful: 3stars: \u2042
 # pycharm colorpicker: alt+enter+c
+
+# font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
 
@@ -44,6 +53,7 @@ unicode tables:
 # done: cursorsprite: Fehler -> cursor kann rechten und unteren dungeonrand verlassen -Formel?
 
 import pygame
+import pygame.freetype # not automatically loaded when importing pygame!
 import random
 import os
 version = 0.5
@@ -260,7 +270,7 @@ class Flytext(VectorSprite):
         #acceleration_factor  # if < 1, Text moves slower. if > 1, text moves faster.
 
     def create_image(self):
-        self.image = make_text(self.text, (self.color), self.fontsize)[0]  # font 22
+        self.image = make_text(self.text, self.color, self.fontsize)  # font 22
         self.rect = self.image.get_rect()
         self.rect.center = (-400,-400) # if you leave this out the Flytext is stuck in the left upper corner at 0,0
         #self.rect.center = (self.pos.x, self.pos.y)
@@ -808,7 +818,7 @@ class Fire(Effect):
 
     pictures =  []
     char = "*"
-    wobble = (3,3)
+    wobble = (0,0)
     #text = "Fire"
     fgcolor = (255,0,0) # for panelinfo
 
@@ -818,7 +828,7 @@ class Fire(Effect):
         colorvalues = list(range(128,256,16))
         random.shuffle(colorvalues)
         for c in colorvalues:
-            Fire.pictures.append(make_text(Fire.char, font_color=(255,c,0), font_size=48, gridsize=Viewer.gridsize)[0])
+            Fire.pictures.append(make_text(Fire.char, font_color=(255,c,0), font_size=64, max_gridsize=Viewer.gridsize))
 
     #def __init__(self, tx, ty, age = 0, max_age = None, dx=0, dy=0 ):
     #    super().__init__(tx, ty, age, max_age, dx, dy)
@@ -840,7 +850,7 @@ class Water(Effect):
         colorvalues = list(range(128, 256, 16))
         colorvalues.extend(list(range(255, 127, -16)))
         for c in colorvalues:
-            pic = make_text(Water.char, font_color=(0,0,c), font_size=48, gridsize=Viewer.gridsize)[0]
+            pic = make_text(Water.char, font_color=(0,0,c), font_size=48, max_gridsize=Viewer.gridsize, expand=True)
             if c%2 == 0: #the first half values (ascending)
                 Water.pictures.append(pic)
             else:        # the second half (descending)            x     y
@@ -856,64 +866,19 @@ class Water(Effect):
 class Flash(Effect):
 
     pictures = [] # necessary!
-    char = "/"
+    char = "\u26A1"
     fgcolor = (0,200,200) # cyan
-    anim_cycle = 20 # so many pictures per second
+    anim_cycle = 25 # so many pictures per second
 
     @classmethod
     def create_pictures(cls):
         """create a spiderweb of withe-blue lines, cracling from the center of tile to it's edge"""
-        corners = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1)) # sides without middle
-        for i in range(60): # 20 fps -> 3 seconds long a new picture for each frame
-            branches = random.randint(1,3)
-            for b in range(branches):
-                start = random.choice(corners)
-                end = (-start[0], -start[1])  # jumping the middle - find vis a vis corner
-                i = corners.index(end)
-                try:
-                    end = corners[i + random.randint(-1,1)]
-                except IndexError:
-                    end = (-start[0], -start[1])
-                pic = pygame.Surface((Viewer.gridsize[0],Viewer.gridsize[1]))
-                pic.set_colorkey((0,0,0)) # black is transparent
-                # wobble
-                center = (random.randint(-5,5), random.randint(-5,5))
-                corner1 = (random.randint(-5,5), random.randint(-5,5))
-                corner2 = (random.randint(-5, 5), random.randint(-5, 5))
-                thickness_white = random.randint(1,4)
-                thickness_blue = random.randint(2,6)
-                blue = (0,0, random.randint(200,255))
-                w = random.randint(200,255)
-                white = (w,w,w)
-                pygame.draw.line(pic, blue, (start[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2+corner1[0],
-                                             start[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2+corner1[1]),
-                        (Viewer.gridsize[0]//2+center[0],Viewer.gridsize[1]//2+center[1]),
-                        thickness_blue+thickness_white)
-                pygame.draw.line(pic, white, (start[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2  + corner1[0],
-                                              start[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner1[1]),
-                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
-                                 thickness_white)
-                pygame.draw.line(pic, blue, (end[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2 + corner2[0],
-                                             end[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner2[1]),
-                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
-                                 thickness_blue + thickness_white)
-                pygame.draw.line(pic, white, (end[0]*Viewer.gridsize[0] + Viewer.gridsize[0]//2 + corner2[0],
-                                              end[1]*Viewer.gridsize[1] + Viewer.gridsize[1]//2 + corner2[1]),
-                                 (Viewer.gridsize[0] // 2 + center[0], Viewer.gridsize[1] // 2 + center[1]),
-                                 thickness_white)
-            pic.convert_alpha()
-            cls.pictures.append(pic)
-
-
-
-
-
-
-
-
-
-
-
+        pic1 = make_text("\u26A1", (0,0,255), 64, Viewer.gridsize)
+        pic2 = make_text("\u26A1", (220,220,255), 64, Viewer.gridsize)
+        pic3 = pygame.transform.flip(pic1, False, True)
+        pic4 = pygame.transform.flip(pic2, False, True)
+        cls.pictures = [pic1,pic2,pic3,pic4]
+        #return
 
 
 class Structure:
@@ -962,7 +927,7 @@ class Wall(Structure):
     when Viewer.paint_tiles "paint" the Structure instances, it calls wallinstance.exploredpicture() or wallinstance.fovpicture()
     to get the correct bitmap to blit
     """
-
+    # use font instead of freetype so that bloxdrawing chars are better centered (no need to calculate center for each box tile)
     fgcolor = (0,150,0)
     block_sight = True
     block_movement = True
@@ -992,9 +957,9 @@ class Wall(Structure):
     @classmethod
     def create_pictures(cls):
         Wall.exploredpictures = { k: make_text(text=v,font_color=Viewer.explored_fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0] for k,v in Wall.lookup.items()}
+                        font_size=128 ,max_gridsize=Viewer.gridsize, expand=False, use_freetype=False) for k,v in Wall.lookup.items()}
         Wall.fovpictures = { k: make_text(text=v,font_color=Wall.fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0] for k,v in Wall.lookup.items()}
+                        font_size=128 ,max_gridsize=Viewer.gridsize, expand=False, use_freetype=False) for k,v in Wall.lookup.items()}
 
 
     def __init__(self, nesw):
@@ -1014,24 +979,24 @@ class Door(Structure):
     """locked doors can be opened by keys.
        doors can be closed again by player, but not locked again.
        by default, doors are locked"""
-
+    # USE font instead of freetype so that doors get not expanded (ugly)
     fgcolor = (140,100,0)
     nesw_tile = "#" # wall. a door can only be between walls
 
     @classmethod
     def create_pictures(cls):
         Door.exploredpicture_closed_v = make_text("|",font_color=Viewer.explored_fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize, use_freetype=False)
         Door.exploredpicture_closed_h = make_text("-", font_color=Viewer.explored_fgcolor,
-                                                  font_size=48, gridsize=Viewer.gridsize)[0]
+                                                  font_size=48, max_gridsize=Viewer.gridsize, use_freetype=False)
         Door.fovpicture_closed_v = make_text("|", font_color=Door.fgcolor,
-                                           font_size=48, gridsize=Viewer.gridsize)[0]
+                                           font_size=48, max_gridsize=Viewer.gridsize, use_freetype=False)
         Door.fovpicture_closed_h = make_text("-", font_color=Door.fgcolor,
-                                         font_size=48, gridsize=Viewer.gridsize)[0]
+                                         font_size=48, max_gridsize=Viewer.gridsize)
         Door.exploredpicture_open = make_text(".",font_color=Viewer.explored_fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize, use_freetype=False)
         Door.fovpicture_open = make_text(".",font_color=Door.fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize, use_freetype=False)
 
 
     def __init__(self, nesw):
@@ -1090,9 +1055,9 @@ class StairDown(Structure):
     @classmethod
     def create_pictures(cls):
         StairDown.exploredpic = make_text("\u21A7",font_color=Viewer.explored_fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize)
         StairDown.fovpic = make_text("\u21A7",font_color=StairDown.fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize)
 
     def __init__(self): # unneccesary ?
         super().__init__()
@@ -1112,9 +1077,9 @@ class StairUp(Structure):
     @classmethod
     def create_pictures(cls):
         StairUp.exploredpic = make_text("\u21A5",font_color=Viewer.explored_fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize)
         StairUp.fovpic = make_text("\u21A5",font_color=StairDown.fgcolor,
-                        font_size=48 ,gridsize=Viewer.gridsize)[0]
+                        font_size=48 ,max_gridsize=Viewer.gridsize)
 
     def __init__(self):   # unneccesary ?
         super().__init__()
@@ -1187,7 +1152,7 @@ class Coin(Item):
         #half_height = Viewer.gridsize[1]//2
         #radius = min(half_width, half_height)
         #pygame.draw.circle(pic, cls.fgcolor, (half_width,half_height), radius)
-        symbol = make_text(cls.char, (255,255,0),gridsize=(Viewer.gridsize[0],Viewer.gridsize[1]))[0]
+        symbol = make_text(cls.char, (255,255,0),max_gridsize=Viewer.gridsize)
         #pic.blit(symbol, (0,0))
         #pic.convert_alpha()
         #cls.pictures.append(pic)
@@ -1215,7 +1180,8 @@ class Key(Item):
 class Food(Item):
 
     pictures = []
-    char = "f"
+    char = "\u2615"
+    fgcolor = (200,0,200)
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1223,7 +1189,8 @@ class Food(Item):
 
     @classmethod
     def create_pictures(cls):
-        cls.pictures.append(Viewer.images["food"])
+        #cls.pictures.append(Viewer.images["food"])
+        cls.pictures.append(make_text("\u2615", cls.fgcolor, 48, Viewer.gridsize, expand=True ))
 
     def pickupeffect(self):
         lookup = {1: "edible food",
@@ -1237,11 +1204,11 @@ class Monster():
 
     pictures = []
     fgcolor = (255,0,0) # red
-    char = "M"
+    char = "\U0001F608" #"M"
 
     @classmethod
     def create_pictures(cls):
-        pic = make_text(cls.char, cls.fgcolor, gridsize=Viewer.gridsize)[0]
+        pic = make_text(cls.char, cls.fgcolor, max_gridsize=Viewer.gridsize)
         cls.pictures.append(pic)
 
     def __init__(self, x, y, z):
@@ -1353,7 +1320,7 @@ class Waterguy(Monster):
 class Player(Monster):
 
     pictures = []
-    char =   "\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
+    char =   "\u263A"#"\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
     fgcolor = (0,0,255)
 
     def __init__(self, x, y, z):
@@ -1397,7 +1364,7 @@ class Viewer:
         # ---- pygame init
         pygame.init()
         #Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
-        Viewer.fontfile = os.path.join("data", "FreeMonoBold.otf")
+        Viewer.fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
 
 
 
@@ -1434,7 +1401,7 @@ class Viewer:
     def load_images(self):
         """load image files once from data subdirectory and store them inside Viewer.images dictionary"""
         # ---- image map from stone soup dungeon crawl -----
-        Viewer.images["main"] = pygame.image.load(os.path.join("data", "main.png")).convert_alpha()
+        Viewer.images["main"] = pygame.image.load(os.path.join("data","from_stone_soup", "main.png")).convert_alpha()
         # --- sub-images from main.png:
         tmp = pygame.Surface.subsurface(Viewer.images["main"], (808, 224, 22, 7)) # arrow
         Viewer.images["arrow"] = pygame.transform.scale(tmp, (35,8))
@@ -1587,6 +1554,7 @@ class Viewer:
         write(self.panelscreen, "{:>3}".format(keys), 25, 200, font_size=32)  # gold text
         # --- food
         self.panelscreen.blit(Viewer.images["food"], (90, 200))
+        #write(self.panelscreen, "\u2615", 90, 200, color=(255,0,255), font_size=32) # unicode sign for coffe
         write(self.panelscreen, "{:>3}".format(food), 130, 200, font_size=32)  # gold text
 
 
@@ -1669,7 +1637,7 @@ class Viewer:
                 if not tile.fov:  # ---- outside fov ----- not in players field of view
                     if tile.explored:  # known from previous encounter
                         pygame.draw.rect(self.screen, exploredbg, (x,y,Viewer.gridsize[0], Viewer.gridsize[1])) # fill
-                        #char = make_text(tile.char, font_color=exploredfg,  font_size=48, gridsize=Viewer.gridsize)[0]
+                        #char = make_text(tile.char, font_color=exploredfg,  font_size=48, max_gridsize=Viewer.gridsize)
                         pic = tile.exploredpicture()
                         if pic is not None:
                             self.screen.blit(pic, (x, y)) # blit from topleft corner
@@ -1682,7 +1650,7 @@ class Viewer:
                     monsters =  [m for m in Game.zoo.values() if m.z == z and m.y == ty and m.x == tx and m.hp > 0]
                     monstercounter = len(monsters)
                     for m in monsters:
-                            #char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, gridsize=Viewer.gridsize)[0]
+                            #char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, max_gridsize=Viewer.gridsize)
                         #self.screen.blit(char, (x, y))  # blit from topleft corner
                         self.screen.blit(m.fovpicture(), (x,y))
                             #break # no more than one monster per tile
@@ -1702,7 +1670,7 @@ class Viewer:
                         itemcounter = len(items)
                         if itemcounter > 1:
                             # blit 'infinite' symbol if more than one items are at one tile
-                            char = make_text("\u221E", font_color=(255,200,50), font_size=48, gridsize=Viewer.gridsize)[0] # infinity sign
+                            char = make_text("\u221E", font_color=(255,200,50), font_size=48, max_gridsize=Viewer.gridsize) # infinity sign
                             self.screen.blit(char, (x, y))  # blit from topleft corner
                         elif itemcounter == 1:
                             #self.screen.blit(char, (x, y))  # blit from topleft corner
@@ -2082,29 +2050,49 @@ def calculate_line(start, end, z, modus="all"):
 # ----------------
 
 
-def make_text(text="@", font_color=(255, 0, 255), font_size=48, gridsize=None):
-    """returns pygame surface with text and x, y dimensions in pixel
-       gridsize must be None or a tuple with positive integers.
-       Use gridsize to scale the text to your desired dimension or None to just render it
+def make_text(text="@", font_color=(255, 0, 255), font_size=64, max_gridsize=None, expand=True, bgcolor=None, rotation=0, style=pygame.freetype.STYLE_DEFAULT, use_freetype=True):
+    """returns pygame surface with text blitted on it
+       max_gridsize must be None or a tuple with positive integers (pixels).
+       expand will zoom the image to the max_gridsize, independent of the font_size
+       max_gridsize given but exapnd on False will center the picture on the gridsize
+       Use max_gridsize to shrink the text to your desired dimension or None to just render it using font_size
        You still need to blit the surface.
-       Example: text with one char for font_size 48 returns the dimensions 29,49
+       Use pygame.rect methods to get width and height of the new surface
     """
     #myfont = pygame.font.SysFont(font_name, font_size, bold) # fontname -> Viewer.fontfile ??
-    myfont = pygame.font.Font(Viewer.fontfile, font_size)
-    size_x, size_y = myfont.size(text)
-    mytext = myfont.render(text, True, font_color)
-    mytext = mytext.convert_alpha() # pygame surface, use for blitting
-    if gridsize is not None:
+    #myfont = pygame.font.Font(Viewer.fontfile, font_size)
+    if use_freetype:
+        myfont = pygame.freetype.Font(Viewer.fontfile, font_size)
+        mytext, myrect = myfont.render(text, font_color, bgcolor, style, rotation, font_size )
+    else:
+        myfont = pygame.font.Font(Viewer.fontfile, font_size)
+        mytext = myfont.render(text, True, font_color)
+        myrect= mytext.get_rect()
+
+
+    #mytext = myfont.render(text, True, font_color)
+    #mytext = mytext.convert_alpha() # pygame surface, use for blitting
+    if max_gridsize is not None:
+        #if size_x > max_gridsize[0]:
+        x = min(myrect.width, max_gridsize[0])
+        y = min(myrect.height, max_gridsize[1])
+        if expand:
+            x = max_gridsize[0]
+            y = max_gridsize[1]
         try:
-            mytext = pygame.transform.scale(mytext, gridsize)
+            mytext = pygame.transform.scale(mytext, (x,y))
         except:
             raise ValueError("grid size must be tuple of positive integers")
+        if not expand:
+            mypic = pygame.Surface(max_gridsize)
+            mypic.set_colorkey((0,0,0))
+            mypic.convert_alpha()
+            mypic.blit(mytext, ( 0,0 ))  #  max_gridsize[0]//2 - myrect.width //2,
+                                         #max_gridsize[1]//2 - myrect.height//2))
+            return mypic
         #if font_color != (0,0,0):
         #    mytext.set_colorkey((0,0,0,))
-        mytext = mytext.convert_alpha()  # pygame surface, use for blitting
-        return mytext, (gridsize[0], gridsize[1])
-
-    return mytext, (size_x, size_y)
+    return mytext
 
 def fight(a, b):
     """dummy function, does nothing yet"""
@@ -2223,4 +2211,4 @@ level2 = """
 
 if __name__ == '__main__':
     #g = Game()
-    Viewer(width=1024, height=800, gridsize=(48,48),panelwidth=200, logheight=100)
+    Viewer(width=1200, height=960, gridsize=(48,48),panelwidth=200, logheight=100)

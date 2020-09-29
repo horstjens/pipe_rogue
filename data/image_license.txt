@@ -1,7 +1,12 @@
-png images are from the awesome Dungeon Crawl project http://crawl.develz.org/
-as far as i understood the license is CC0.
-
+folder from_stone_soup:
+    png images are from the awesome Dungeon Crawl project http://crawl.develz.org/
+    as far as i understood the license is CC0.
+    
+data folder:
 old_key.png  from https://openmoji.org/  license: CC-BY 4.0
 food1.png    from https://creazilla.com/nodes/48737-pot-of-food-emoji-clipart license: CC-BY 4.0
 goldchest.png from https://creazilla.com/nodes/30996-treasure-chest-filled-with-gold-clipart license: public domain
 
+fonsts folder:
+    deja vu sans fonts: 	Bitstream Vera Fonts Copyright, Arev Fonts Copyright, Public Domain: https://dejavu-fonts.github.io/License.html
+    
