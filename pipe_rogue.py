@@ -33,11 +33,17 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: include pathfinding from test
+# TODO: save levels to pickle, load levels when changing player.z
+# TODO: dungoen generator, dungeon Viewer / Editor (pysimplegui?)
+# TODO: include complex fight / strike system
+# TODO: diplay unicode symbols for attack/defense rolls
 
+# TODO: make correct docstring for make_text
 # TODO: light emiiting lamps, difference fov - light, turning lamps on and off, sight_distacne <> torchradius
-# TODO: big enjoy Flytext: grid is painted OVER flytext? -> hould be: first grid, than flytext on top!
-# TODO: make bitmpap out of every maketext-char to faciliate easier replacing with images
-# TODO: fireeffect sprite erscheint in der linken oberen ecke -> create_image / init / update ?
+# TODO: big enjoy Flytext: gridcursorsprite is painted OVER flytext -> should be: first grid, than flytext on top!
+# don: make bitmpap out of every maketext-char to faciliate easier replacing with images
+# wontfix because using maketext:  fireeffect sprite erscheint in der linken oberen ecke -> create_image / init / update ?
 # TODO: minimalspeed für Arrow, soll trotzdem am target_tile verschwinden - max_distance
 # TODO: (autohiding) hint/button in panel when player at stair and up/down command is possible
 # TODO: Monster movement: actualy move (sprites) instead of teleport tiles. Fixed time (0.5 sec) for all movements?
@@ -45,7 +51,7 @@ unicode tables:
 # TODO: Monster moving toward each other when fighting
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
-# TODO: drop items
+# TODO: drop items -> autoloot? manual pickup command?
 # done: in Viewer.load_images, iterate over all subclasses of Structure automatically
 # done: shießen mit F geht nicht mehr
 # done: cursorsprite : Fehler -> wird ungenau je mehr man nach rechts fährt
@@ -281,6 +287,23 @@ class Flytext(VectorSprite):
     def update(self, seconds):
         self.move *= self.acceleration_factor
         VectorSprite.update(self, seconds)
+
+class BlueTile(VectorSprite):
+
+    def _overwrite_parameters(self):
+        self.color = (0,0,255) # blue
+
+    def create_image(self):
+        self.image = pygame.surface.Surface((Viewer.gridsize[0],
+                                             Viewer.gridsize[1]))
+        #c = random.randint(100, 250)
+
+        pygame.draw.rect(self.image, self.color, (0, 0, Viewer.gridsize[0],
+                                                 Viewer.gridsize[1]), 5)
+        #self.image.set_colorkey((0, 0, 0))
+        self.image.set_alpha(128)
+        #self.image.convert_alpha()
+        self.rect = self.image.get_rect()
 
 class TileCursor(VectorSprite):
 
@@ -1537,6 +1560,7 @@ class Viewer:
         Viewer.allgroup = pygame.sprite.LayeredUpdates()  # for drawing with layers
         Viewer.playergroup  = pygame.sprite.OrderedUpdates() # a group maintaining order in list
         Viewer.cursorgroup = pygame.sprite.Group()
+        Viewer.bluegroup = pygame.sprite.Group()
         Viewer.flygroup = pygame.sprite.Group()
         #Viewer.effectgroup = pygame.sprite.Group() # dirtygroup?
         #self.bulletgroup = pygame.sprite.Group() # simple group for collision testing only
@@ -1550,6 +1574,7 @@ class Viewer:
         #Player.groups = self.allgroup, self.playergroup
         #Beam.groups = self.allgroup, self.bulletgroup
         TileCursor.groups = self.cursorgroup
+        BlueTile.groups = self.bluegroup, self.allgroup
         VectorSprite.groups = self.allgroup
         #SpriteEffect.groups =  self.effectgroup
         Bubble.groups = self.allgroup, self.fxgroup # special effects
@@ -1833,6 +1858,12 @@ class Viewer:
                             print("selected: ", selection)
                             cursormode = False
                     else:
+                        #if event.key == pygame.K_1:
+                        #    # testing bluegroup
+                        #    cell = self.pixel_to_tile(pygame.mouse.get_pos())
+                        #    px,py = self.tile_to_pixel(cell)
+                        #    BlueTile(pos=pygame.math.Vector2(px,py))
+
                         if event.key == pygame.K_ESCAPE:
                             running = False
                         if event.key == pygame.K_f: # start selection with cursor (mouse)
