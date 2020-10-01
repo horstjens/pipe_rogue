@@ -427,7 +427,7 @@ class Game:
                (0, -1): 3}
 
     def __init__(self):
-        self.create_dungeon([level1, level2])
+        self.create_dungeon([level1, level2, level3])
         # extra food on2,4
         Food(2,4,0)
 
@@ -713,6 +713,19 @@ class Game:
         else:
             text.append("You must stay on a stair down to use this command")
         return text
+
+    def eat(self):
+        food = [i for i in Game.items.values()
+                if isinstance(i, Food) and i.backpack]
+        if len(food) == 0:
+            return ["you have no food in your backpack"]
+        # we have food :-)
+        myfood = food[0]
+        quality = myfood.food_value # 1,2 or 3
+        self.player.hp += myfood.food_value
+        del Game.items[myfood.number]
+        return [f"you eat food and regain {quality} hp"]
+
 
     def turn(self, dx, dy):
         Game.turn_number += 1
@@ -1894,6 +1907,9 @@ class Viewer:
                         if event.key == pygame.K_c: # close door
                             self.loglines.extend(self.g.close_door())
                             repaint = True
+                        if event.key == pygame.K_e: # eat foot
+                            self.loglines.extend(self.g.eat())
+                            repaint = True
                         # ---------- on german keyboard, K_GREATER key is the same as SHIFT and K_LESS
                         if event.mod & pygame.KMOD_LSHIFT or event.mod & pygame.KMOD_RSHIFT:
                             if event.key == pygame.K_GREATER or event.key == pygame.K_LESS:
@@ -2252,7 +2268,7 @@ level1 = """
 level2 = """
 #################################################################
 #..<............................................................#
-#...............................................................#
+#>..............................................................#
 #...............................................................#
 #...............................................................#
 #...............##d###..........................................#
@@ -2266,6 +2282,13 @@ level2 = """
 #...............................................................#
 #...............................................................#
 #################################################################"""
+
+level3= """
+################################
+#..............................#
+#<.............................#
+#..............................#
+################################"""
 
 
 
