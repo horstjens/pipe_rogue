@@ -343,13 +343,14 @@ class TileCursor(VectorSprite):
         self.tx, self.ty = 0, 0
 
     def create_image(self):
-        self.image = pygame.surface.Surface((Viewer.gridsize[0], Viewer.gridsize[1]))
+        w = pulse(self.age, 1, 5, 5)
+        self.image = pygame.surface.Surface((Viewer.gridsize[0]+w, Viewer.gridsize[1]+w))
         c = pulse(self.age, 200, 255, 55)
         w = pulse(self.age, 1, 5, 5)
         pygame.draw.rect(
             self.image,
             (100, 0, c),
-            (0, 0, Viewer.gridsize[0], Viewer.gridsize[1]),
+            (0, 0, Viewer.gridsize[0]+w, Viewer.gridsize[1]+w),
             w,
         )
         self.image.set_colorkey((0, 0, 0))
@@ -2418,14 +2419,32 @@ class Viewer:
 
 ## -------------------- functions --------------------------------
 
-
 def pulse(age_in_seconds, min_value=1, max_value=6, values_per_second=1):
-    """takes a (Sprite) age in seconds and generates a pulsating value,
-    (to use as color or border width)
-    age: -> float  usually self.age in seconds of sprite.
-    min_value: -> int  the minimal generated value
-    max_value: -> int  the maximal generated value
-    values_per_second -> float, != 0,  how many values to generate per second"""
+    """Generate a pulsating value generated from age_in_seconds.
+
+    Parameters
+    ----------
+    age_in_seconds : float
+        seed value for calculation, usually the .age attribute of a VectorSprite
+    min_value : int
+        Minumum output value
+    max_value: int
+        Maximum output value. Must be lesser than min_value
+    values_per_second: float
+        Can not be zero. How many pulse values should be generated in the interval of one second.
+        Only meaningful if age_in_seconds is a .age attribute of a Sprite and the function is called
+         several times per second.
+
+    Returns
+    -------
+    int
+        The pulsating value, oscillating between min_value and max_value
+
+    Examples
+    --------
+    >>> print([pulse(i,1,6,1) for i in range(15)])
+    [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1, 2, 3, 4, 5]
+    """
     if not isinstance(min_value, int):
         raise ValueError(f"min_value {min_value} must be integer")
     if not isinstance(max_value, int):
@@ -2445,8 +2464,6 @@ def pulse(age_in_seconds, min_value=1, max_value=6, values_per_second=1):
         return int(half - (i - half)) + min_value
     else:
         return int(i) + min_value
-
-
 def get_line(start, end):
     """Bresenham's Line Algorithm
     Produces a list of tuples from start and end
