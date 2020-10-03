@@ -32,6 +32,7 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: set_alpha , transparency for Flytext sprite. Why does it work only inside Viewer using Surface (see K_t)?
 # TODO: shooting through walls is possible?!
 # TODO: include pathfinding from test
 # TODO: save levels to pickle, load levels when changing player.z
@@ -49,6 +50,7 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: fat skull for trap -> STRONG textstyle for Flytext
 # done: in Viewer.load_images, iterate over all subclasses of Structure automatically
 # done: shießen mit F geht nicht mehr
 # done: cursorsprite : Fehler -> wird ungenau je mehr man nach rechts fährt
@@ -99,8 +101,8 @@ class VectorSprite(pygame.sprite.Sprite):
             setattr(self, key, arg)
         if "layer" not in kwargs:
             self.layer = 0
-        else:
-            self.layer = self.layer
+        #else:
+        #    self.layer = self.layer
         if "pos" not in kwargs:
             self.pos = pygame.math.Vector2(200, 200)
         if "move" not in kwargs:
@@ -216,7 +218,7 @@ class VectorSprite(pygame.sprite.Sprite):
             self.pos += self.move * seconds
             self.wallcheck()
         # print("rect:", self.pos.x, self.pos.y)
-        self.rect.center = (round(self.pos.x, 0), round(self.pos.y, 0))
+        self.rect.center = (int(round(self.pos.x, 0)), int(round(self.pos.y, 0)))
 
     def wallcheck(self):
         # ---- bounce / kill on screen edge ----
@@ -283,8 +285,15 @@ class Flytext(VectorSprite):
         fontsize=22,
         textrotation=0,
         bgcolor=None,
+        style= pygame.freetype.STYLE_STRONG,
+        alpha_start = 255,
+        alpha_end = 255
     ):
         """a text flying upward and for a short time and disappearing"""
+        if alpha_start != alpha_end:
+            alphadiff = alpha_start - alpha_end
+            self.alpha_diff_per_second = alphadiff / max_age  # assumes age = 0 at start for alpha calculation
+
         VectorSprite.__init__(
             self,
             pos=pos,
@@ -297,8 +306,13 @@ class Flytext(VectorSprite):
             fontsize=fontsize,
             textrotation=textrotation,
             bgcolor=bgcolor,
+            style=style,
+            alpha_start=alpha_start,
+            alpha_end=alpha_end,
         )
         self._layer = 7  # order of sprite layers (before / behind other sprites)
+
+
 
         # acceleration_factor  # if < 1, Text moves slower. if > 1, text moves faster.
 
@@ -310,14 +324,26 @@ class Flytext(VectorSprite):
             bgcolor=self.bgcolor,
             size=self.fontsize,
             rotation=self.textrotation,
+            style=self.style,
         )  # font 22
         self.image = text
         self.rect = textrect
+        if self.alpha_start == self.alpha_end == 255:
+            pass
+        elif self.alpha_start == self.alpha_end:
+            self.image.set_alpha(self.alpha_start)
+            print("fix alpha", self.alpha_start)
+        else:
+            self.image.set_alpha(self.alpha_start - self.age * self.alpha_diff_per_second)
+            print("alpha:", self.alpha_start - self.age * self.alpha_diff_per_second)
+        self.image = self.image.convert_alpha()
         # self.rect.center = (-400,-400) # if you leave this out the Flytext is stuck in the left upper corner at 0,0
-        self.rect.center = (self.pos.x, self.pos.y)
+        self.rect.center = (int(round(self.pos.x,0)), int(round(self.pos.y,0)))
 
     def update(self, seconds):
         self.move *= self.acceleration_factor
+        if self.alpha_start != self.alpha_end:
+            self.create_image()
         VectorSprite.update(self, seconds)
 
 
@@ -344,13 +370,15 @@ class TileCursor(VectorSprite):
 
     def create_image(self):
         w = pulse(self.age, 1, 5, 5)
-        self.image = pygame.surface.Surface((Viewer.gridsize[0]+w, Viewer.gridsize[1]+w))
+        self.image = pygame.surface.Surface(
+            (Viewer.gridsize[0] + w, Viewer.gridsize[1] + w)
+        )
         c = pulse(self.age, 200, 255, 55)
         w = pulse(self.age, 1, 5, 5)
         pygame.draw.rect(
             self.image,
             (100, 0, c),
-            (0, 0, Viewer.gridsize[0]+w, Viewer.gridsize[1]+w),
+            (0, 0, Viewer.gridsize[0] + w, Viewer.gridsize[1] + w),
             w,
         )
         self.image.set_colorkey((0, 0, 0))
@@ -669,7 +697,7 @@ class Game:
     def move(self, monster, dx, dy):
         """
         move the monster instance (hero) through the dungeon, if possible
-        assumes that the dungeon is surronded by an outer wall
+        assumes that the dungeon is surrounded by an outer wall
         hero can open a closed door if he has a spare key
         hero can strike at monster, monster can strike at hero
         """
@@ -822,11 +850,22 @@ class Game:
                 text.append(
                     "You found an open door. You can press [c] to close it (re-opening possible without key)"
                 )
+        # triggering a trap (traps are items) or
         # (auto)picking up item at current position
-        for i in Game.items.values():
-            if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack:
-                text.append(f"you pick up: {type(i).__name__}")
-                i.backpack = True
+        items= [i for i in Game.items.values() if i.z == hero.z
+                and i.x == hero.x
+                and i.y == hero.y
+                and not i.backpack]
+        for i in items:
+                if isinstance(i, Trap):
+                    damage = random.randint(1,6)
+                    text.append(f"You run into a trap and loose {damage} hp."
+                                " The trap is destroyed")
+                    hero.hp -= damage
+                    del Game.items[i.number]
+                else:
+                    text.append(f"you pick up: {type(i).__name__}")
+                    i.backpack = True
                 ## create Bubble effect here
                 i.pickupeffect()
 
@@ -1341,6 +1380,52 @@ class Key(Item):
     @classmethod
     def create_pictures(cls):
         cls.pictures.append(Viewer.images["key"])
+
+class Trap(Item):
+    pictures = []
+    fgcolor = (1,1,1)
+    char = "\u2620" # skull and bones
+
+    @classmethod
+    def create_pictures(cls):
+        symbol = make_text(cls.char, (255, 255, 0), style=pygame.freetype.STYLE_STRONG) # invisible?
+        cls.pictures.append(symbol)
+
+    def __init__(self, x, y, z):
+        super().__init__(x,y,z)
+        self.damage = random.randint(1,6)
+        self.name = "spike trap"
+        self.detected = False
+        self.disarmed = False
+
+
+    def pickupeffect(self):
+        px, py = Viewer.tile_to_pixel((self.x, self.y))
+        Flytext(
+            pos=pygame.math.Vector2(px, py),
+            move=pygame.math.Vector2(0, 0),
+            text=self.char,
+            color=(255,255,255),
+            bgcolor=(2,2,2),
+            fontsize=100,
+            acceleration_factor=1.01,
+            max_age = 4,
+            alpha_start = 255,
+            alpha_end = 0,
+        )
+        Flytext(
+            pos=pygame.math.Vector2(px,py),
+            move = pygame.math.Vector2(0, -20),
+            text = f"-{self.damage} hp",
+            color = (200,0,0),
+            fontsize = 32,
+            acceleration_factor = 1.00,
+            max_age = 4
+        )
+
+
+
+
 
 
 class Food(Item):
@@ -2200,8 +2285,8 @@ class Viewer:
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
             text="Enjoy pipe_rogue!",
-            fontsize=48,
-            max_age=3,
+            fontsize=64,
+            max_age=6,
         )
         # Flytext(text="press h for help", age=-2)
         # self.screen_backup = self.screen.copy()
@@ -2292,6 +2377,15 @@ class Viewer:
                         elif event.key == pygame.K_LESS:  # climb up
                             self.loglines.extend(self.g.climb_up())
                             repaint = True
+                        #if event.key == pygame.K_t:
+                        #    Flytext(pos=pygame.math.Vector2(400,400), text="testing", bgcolor=(1,1,1), age=5)
+                        #    # testing
+                        #    pic = pygame.Surface((100,100))
+                        #    pygame.draw.circle(pic, (200,30,50), (50,50), 50)
+                        #    Viewer.font.render_to(pic, ( 20,20), "hallo", (50,200,20), size=22)
+                        #    pic.set_alpha(32)
+                        #    pic.convert_alpha()
+                        #    self.screen.blit(pic,(500,400))
 
                         # ----------------------
 
@@ -2419,6 +2513,7 @@ class Viewer:
 
 ## -------------------- functions --------------------------------
 
+
 def pulse(age_in_seconds, min_value=1, max_value=6, values_per_second=1):
     """Generate a pulsating value generated from age_in_seconds.
 
@@ -2464,6 +2559,8 @@ def pulse(age_in_seconds, min_value=1, max_value=6, values_per_second=1):
         return int(half - (i - half)) + min_value
     else:
         return int(i) + min_value
+
+
 def get_line(start, end):
     """Bresenham's Line Algorithm
     Produces a list of tuples from start and end
@@ -2571,6 +2668,7 @@ def make_text(
     style=pygame.freetype.STYLE_DEFAULT,
     size=None,
     mono=False,
+    alpha=None,
 ):
     """returns pygame surface (Viewer.gridsize[0] x Viewer.gridsize[1]) with text blitted on it.
     The text is centered on the surface. Font_size = Viewer.fontsize
@@ -2595,7 +2693,8 @@ def make_text(
         text1, rect1 = myfont.render(text, fgcolor, bgcolor, style, rotation, size)
 
     surf = pygame.Surface(Viewer.gridsize)
-    surf.set_colorkey((0, 0, 0))
+    if alpha is None:
+        surf.set_colorkey((0, 0, 0))
     surf.convert_alpha()
 
     midx = Viewer.gridsize[0] // 2
@@ -2704,11 +2803,12 @@ legend = {
     "$": Coin,
     "f": Food,
     "ß": Snake,
+    "T": Trap,
 }
 level1 = """
 ######################################
 #@#...#.k.d....#............$.....M..#
-#>...#....#........#..###...#...#....#
+#>TTT#....#........#..###...#...#....#
 ##.#.#ff..####.#...####....###.......#
 #.$$.M.....ß.#.#....#...ff..#...$....#
 ######################################"""
