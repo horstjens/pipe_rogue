@@ -341,26 +341,16 @@ class BlueTile(VectorSprite):
 class TileCursor(VectorSprite):
     def _overwrite_parameters(self):
         self.tx, self.ty = 0, 0
-        self.c = 200
-        self.c_min = 200
-        self.c_max = 255
-        self.dc = 15
 
     def create_image(self):
         self.image = pygame.surface.Surface((Viewer.gridsize[0], Viewer.gridsize[1]))
-        # c = random.randint(100, 250)
-        self.c += self.dc
-        if self.c >= self.c_max:
-            self.dc = -1
-        if self.c <= self.c_min:
-            self.dc = 1
-        self.c = between(self.c, self.c_min, self.c_max)
-
+        c = pulse(self.age, 200, 255, 55)
+        w = pulse(self.age, 1, 5, 5)
         pygame.draw.rect(
             self.image,
-            (self.c, self.c, self.c),
+            (100, 0, c),
             (0, 0, Viewer.gridsize[0], Viewer.gridsize[1]),
-            self.c % 30 // 10 + 1,
+            w,
         )
         self.image.set_colorkey((0, 0, 0))
         self.image.convert_alpha()
@@ -2427,6 +2417,34 @@ class Viewer:
 
 
 ## -------------------- functions --------------------------------
+
+
+def pulse(age_in_seconds, min_value=1, max_value=6, values_per_second=1):
+    """takes a (Sprite) age in seconds and generates a pulsating value,
+    (to use as color or border width)
+    age: -> float  usually self.age in seconds of sprite.
+    min_value: -> int  the minimal generated value
+    max_value: -> int  the maximal generated value
+    values_per_second -> float, != 0,  how many values to generate per second"""
+    if not isinstance(min_value, int):
+        raise ValueError(f"min_value {min_value} must be integer")
+    if not isinstance(max_value, int):
+        raise ValueError(f"max_value {max_value} must be integer")
+    if min_value >= max_value:
+        raise ValueError(
+            f"min_value {min_value} must be lesser than max_value {max_value}"
+        )
+    if values_per_second == 0:
+        raise ValueError(f"0 is not allowed for values_per_second")
+    amount = (max_value - min_value) * 2
+    half = amount / 2
+    a = age_in_seconds * values_per_second  # 1 / values_per_second
+    i = int(a % amount)
+
+    if i > half:
+        return int(half - (i - half)) + min_value
+    else:
+        return int(i) + min_value
 
 
 def get_line(start, end):
