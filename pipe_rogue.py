@@ -32,8 +32,10 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: turn system each effect must finish before next turn starts
+# TODO: less max_age for effects (Trap, fight)
+# TODO: import dice functions with re-roll, use for Trap damage
 # TODO: Trap code should respect Trap.__init__ for damage etc
-# TODO: set_alpha , transparency for Flytext sprite. Why does it work only inside Viewer using Surface (see K_t)?
 # TODO: shooting through walls is possible?!
 # TODO: include pathfinding from test
 # TODO: save levels to pickle, load levels when changing player.z
@@ -51,6 +53,7 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: set_alpha , transparency for Flytext sprite. (setalpha works only with freetye.render_to, not with freetype.render
 # done: fat skull for trap -> STRONG textstyle for Flytext
 # done: in Viewer.load_images, iterate over all subclasses of Structure automatically
 # done: shießen mit F geht nicht mehr
@@ -102,7 +105,7 @@ class VectorSprite(pygame.sprite.Sprite):
             setattr(self, key, arg)
         if "layer" not in kwargs:
             self.layer = 0
-        #else:
+        # else:
         #    self.layer = self.layer
         if "pos" not in kwargs:
             self.pos = pygame.math.Vector2(200, 200)
@@ -271,12 +274,11 @@ class VectorSprite(pygame.sprite.Sprite):
                 self.pos.y = 0
 
 
-
-
 class Flytext(VectorSprite):
-
     def __init__(
         self,
+        tx = None,
+        ty = None,
         pos=pygame.math.Vector2(50, 50),
         move=pygame.math.Vector2(0, -50),
         text="hallo",
@@ -287,18 +289,20 @@ class Flytext(VectorSprite):
         acceleration_factor=1.0,
         fontsize=22,
         textrotation=0,
-        style= pygame.freetype.STYLE_STRONG,
-        alpha_start = 255,
-        alpha_end = 255,
-        width_start = None,
-        width_end = None,
-        height_start = None,
-        height_end = None,
-        rotate_start = 0,
-        rotate_end = 0,
+        style=pygame.freetype.STYLE_STRONG,
+        alpha_start=255,
+        alpha_end=255,
+        width_start=None,
+        width_end=None,
+        height_start=None,
+        height_end=None,
+        rotate_start=0,
+        rotate_end=0,
     ):
         """Create a flying VectorSprite with text that disappears after a while
 
+        :param int tx:                      startposition x in tiles. If not None, it overwrites pos Vector
+        :param int ty:                      startposition y in tiles. If not None, it overwrites pos Vector
         :param pygame.math.Vector2 pos:     startposition in Pixel. To attach the text to another Sprite, use an existing Vector.
         :param pygame.math.Vector2 move:    movevector in Pixel per second
         :param text:                        the text to render. accept unicode chars
@@ -321,11 +325,18 @@ class Flytext(VectorSprite):
         :return: None
         """
 
+        if tx is not None and ty is not None:
+            self.tx, self.ty = tx, ty
+            px, py = Viewer.tile_to_pixel((tx, ty))
+            posvector = pygame.math.Vector2(px, py)
+            pos = posvector
         self.recalc_each_frame = False
         self.text = text
         self.alpha_start = alpha_start
         self.alpha_end = alpha_end
-        self.alpha_diff_per_second = alpha_start - alpha_end / max_age  # assumes age = 0 at start for alpha calculation
+        self.alpha_diff_per_second = ( alpha_start - alpha_end) / max_age
+        if alpha_end != alpha_start:
+            self.recalc_each_frame = True
         self.style = style
         self.acceleration_factor = acceleration_factor
         self.fontsize = fontsize
@@ -349,15 +360,14 @@ class Flytext(VectorSprite):
         self.rotate_start = rotate_start
         self.rotate_end = rotate_end
         if (rotate_start != 0 or rotate_end != 0) and rotate_start != rotate_end:
-            self.rotate_diff_per_second = ( rotate_end - rotate_start) / max_age
+            self.rotate_diff_per_second = (rotate_end - rotate_start) / max_age
             self.recalc_each_frame = True
         else:
             self.rotate_diff_per_second = 0
 
-
         VectorSprite.__init__(
             self,
-            color = color,
+            color=color,
             pos=pos,
             move=move,
             max_age=max_age,
@@ -365,16 +375,14 @@ class Flytext(VectorSprite):
         )
         self._layer = 7  # order of sprite layers (before / behind other sprites)
 
-
-
         # acceleration_factor  # if < 1, Text moves slower. if > 1, text moves faster.
 
     def create_image(self):
         myfont = Viewer.font
-        #text, textrect = myfont.render(
-        #fgcolor=self.color,
-        #bgcolor=self.bgcolor,
-        #get_rect(text, style=STYLE_DEFAULT, rotation=0, size=0) -> rect
+        # text, textrect = myfont.render(
+        # fgcolor=self.color,
+        # bgcolor=self.bgcolor,
+        # get_rect(text, style=STYLE_DEFAULT, rotation=0, size=0) -> rect
         textrect = myfont.get_rect(
             text=self.text,
             size=self.fontsize,
@@ -382,18 +390,19 @@ class Flytext(VectorSprite):
             style=self.style,
         )  # font 22
         self.image = pygame.Surface((textrect.width, textrect.height))
-        #render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
+        # render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
         textrect = myfont.render_to(
             surf=self.image,
-            dest = (0,0),
-            text = self.text,
-            fgcolor = self.color,
-            bgcolor = self.bgcolor,
+            dest=(0, 0),
+            text=self.text,
+            fgcolor=self.color,
+            bgcolor=self.bgcolor,
             style=self.style,
             rotation=self.textrotation,
-            size=self.fontsize)
+            size=self.fontsize,
+        )
         if self.bgcolor is None:
-            self.image.set_colorkey((0,0,0))
+            self.image.set_colorkey((0, 0, 0))
 
         self.rect = textrect
         # transparcent ?
@@ -401,10 +410,12 @@ class Flytext(VectorSprite):
             pass
         elif self.alpha_start == self.alpha_end:
             self.image.set_alpha(self.alpha_start)
-            #print("fix alpha", self.alpha_start)
+            # print("fix alpha", self.alpha_start)
         else:
-            self.image.set_alpha(self.alpha_start - self.age * self.alpha_diff_per_second)
-            #print("alpha:", self.alpha_start - self.age * self.alpha_diff_per_second)
+            self.image.set_alpha(
+                self.alpha_start - self.age * self.alpha_diff_per_second
+            )
+            # print("alpha:", self.alpha_start - self.age * self.alpha_diff_per_second)
         self.image.convert_alpha()
         # save the rect center for zooming and rotating
         oldcenter = self.image.get_rect().center
@@ -416,17 +427,20 @@ class Flytext(VectorSprite):
                 self.height_start = textrect.height
             w = self.width_start + self.age * self.width_diff_per_second
             h = self.height_start + self.age * self.height_diff_per_second
-            self.image = pygame.transform.scale(self.image, (int(w),int(h)) )
+            self.image = pygame.transform.scale(self.image, (int(w), int(h)))
         # rotation?
         if self.rotate_start != 0 or self.rotate_end != 0:
             if self.rotate_diff_per_second == 0:
-                self.image = pygame.transform.rotate(self.image,self.rotate_start)
+                self.image = pygame.transform.rotate(self.image, self.rotate_start)
             else:
-                self.image = pygame.transform.rotate(self.image, self.rotate_start + self.age * self.rotate_diff_per_second)
+                self.image = pygame.transform.rotate(
+                    self.image,
+                    self.rotate_start + self.age * self.rotate_diff_per_second,
+                )
         # restore the old center after zooming and rotating
         self.rect = self.image.get_rect()
         self.rect.center = oldcenter
-        self.rect.center = (int(round(self.pos.x,0)), int(round(self.pos.y,0)))
+        self.rect.center = (int(round(self.pos.x, 0)), int(round(self.pos.y, 0)))
 
     def update(self, seconds):
         self.move *= self.acceleration_factor
@@ -940,20 +954,25 @@ class Game:
                 )
         # triggering a trap (traps are items) or
         # (auto)picking up item at current position
-        items= [i for i in Game.items.values() if i.z == hero.z
-                and i.x == hero.x
-                and i.y == hero.y
-                and not i.backpack]
+        items = [
+            i
+            for i in Game.items.values()
+            if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack
+        ]
         for i in items:
-                if isinstance(i, Trap):
-                    damage = random.randint(1,6)
-                    text.append(f"You run into a trap and loose {damage} hp."
-                                " The trap is destroyed")
-                    hero.hp -= damage
-                    del Game.items[i.number]
-                else:
-                    text.append(f"you pick up: {type(i).__name__}")
-                    i.backpack = True
+            if isinstance(i, Trap):
+                damage = i.calculate_damage()
+                hero.hp -= damage
+                del Game.items[i.number]
+                text.append(
+                    f"You run into a trap and loose {damage} hp."
+                    " The trap is destroyed"
+                )
+                i.effect(damage)
+
+            else:
+                text.append(f"you pick up: {type(i).__name__}")
+                i.backpack = True
                 ## create Bubble effect here
                 i.pickupeffect()
 
@@ -1469,51 +1488,59 @@ class Key(Item):
     def create_pictures(cls):
         cls.pictures.append(Viewer.images["key"])
 
+
 class Trap(Item):
     pictures = []
-    fgcolor = (1,1,1)
-    char = "\u2620" # skull and bones
+    fgcolor = (1, 1, 1)
+    char = "\u2620"  # skull and bones
 
     @classmethod
     def create_pictures(cls):
-        symbol = make_text(cls.char, (255, 255, 0), style=pygame.freetype.STYLE_STRONG) # invisible?
+        symbol = make_text(
+            cls.char, (255, 255, 0), style=pygame.freetype.STYLE_STRONG
+        )  # yellow (invisible?)
         cls.pictures.append(symbol)
 
     def __init__(self, x, y, z):
-        super().__init__(x,y,z)
-        self.damage = random.randint(1,6)
+        super().__init__(x, y, z)
+        self.damage_dice = "2d4"
         self.name = "spike trap"
         self.detected = False
         self.disarmed = False
+        self.chance_to_destroy = 0.4
 
+    def calculate_destroy(self):
+        if random.random() < self.chance_to_destroy:
+            return True
+        return False
 
-    def pickupeffect(self):
+    def calculate_damage(self):
+        """damage the traps inflicts on player (or Monster)"""
+        return random.randint(1, 6)
+
+    def effect(self, damage):
         px, py = Viewer.tile_to_pixel((self.x, self.y))
         Flytext(
             pos=pygame.math.Vector2(px, py),
             move=pygame.math.Vector2(0, 0),
             text=self.char,
-            color=(255,255,255),
-            bgcolor=(2,2,2),
+            color=(255, 255, 255),
+            bgcolor=(2, 2, 2),
             fontsize=100,
             acceleration_factor=1.01,
-            max_age = 4,
-            alpha_start = 255,
-            alpha_end = 0,
+            max_age=4,
+            alpha_start=255,
+            alpha_end=0,
         )
         Flytext(
-            pos=pygame.math.Vector2(px,py),
-            move = pygame.math.Vector2(0, -20),
-            text = f"-{self.damage} hp",
-            color = (200,0,0),
-            fontsize = 32,
-            acceleration_factor = 1.00,
-            max_age = 4
+            pos=pygame.math.Vector2(px, py),
+            move=pygame.math.Vector2(0, -20),
+            text=f"-{damage} hp",
+            color=(200, 0, 0),
+            fontsize=32,
+            acceleration_factor=1.00,
+            max_age=4,
         )
-
-
-
-
 
 
 class Food(Item):
@@ -2372,21 +2399,19 @@ class Viewer:
         pygame.display.set_caption("pipe_rogue version:".format(version))
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
-            move=pygame.math.Vector2(0,-5),
+            move=pygame.math.Vector2(0, -15),
             text="Enjoy pipe_rogue!",
             fontsize=64,
-            max_age=8,
+            max_age=4,
             bgcolor=None,
             alpha_start=255,
-            alpha_end=255,
-            width_start = None,
-            width_end = None,
-            height_start = 200,
-            height_end = 100,
-            rotate_start= 0,
-            rotate_end = 45,
-
-
+            alpha_end=0,
+            width_start=None,
+            width_end=None,
+            height_start=None,
+            height_end=None,
+            rotate_start=0,
+            rotate_end=0,
         )
         # Flytext(text="press h for help", age=-2)
         # self.screen_backup = self.screen.copy()
@@ -2477,7 +2502,7 @@ class Viewer:
                         elif event.key == pygame.K_LESS:  # climb up
                             self.loglines.extend(self.g.climb_up())
                             repaint = True
-                        #if event.key == pygame.K_t:
+                        # if event.key == pygame.K_t:
                         #    Flytext(pos=pygame.math.Vector2(400,400), text="testing", bgcolor=(1,1,1), age=5)
                         #    # testing
                         #    pic = pygame.Surface((100,100))
@@ -2824,7 +2849,10 @@ def impact_bubbles(a, b):
     m.normalize_ip()
     # impact point
     impactpoint = pygame.math.Vector2(bx, by) - m * Viewer.gridsize[0] // 2
-    for _ in range(25):
+    Flytext(tx=b.x, ty=b.y, color=a.fgcolor, text="\u2694", fontsize=64,
+            move=pygame.math.Vector2(0,-5), width_start = Viewer.gridsize[0],
+            width_end=Viewer.gridsize[0]*2) # crossed Swords
+    for _ in range(15):
         po = pygame.math.Vector2(impactpoint.x, impactpoint.y)
         mo = pygame.math.Vector2(m.x, m.y)
         mo.rotate_ip(random.randint(-60, 60))
