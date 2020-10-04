@@ -32,6 +32,7 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: Trap code should respect Trap.__init__ for damage etc
 # TODO: set_alpha , transparency for Flytext sprite. Why does it work only inside Viewer using Surface (see K_t)?
 # TODO: shooting through walls is possible?!
 # TODO: include pathfinding from test
@@ -270,8 +271,9 @@ class VectorSprite(pygame.sprite.Sprite):
                 self.pos.y = 0
 
 
+
+
 class Flytext(VectorSprite):
-    """a text flying for a short time around, like hitpoints lost message"""
 
     def __init__(
         self,
@@ -279,36 +281,87 @@ class Flytext(VectorSprite):
         move=pygame.math.Vector2(0, -50),
         text="hallo",
         color=(255, 0, 0),
+        bgcolor=None,
         max_age=2,
         age=0,
         acceleration_factor=1.0,
         fontsize=22,
         textrotation=0,
-        bgcolor=None,
         style= pygame.freetype.STYLE_STRONG,
         alpha_start = 255,
-        alpha_end = 255
+        alpha_end = 255,
+        width_start = None,
+        width_end = None,
+        height_start = None,
+        height_end = None,
+        rotate_start = 0,
+        rotate_end = 0,
     ):
-        """a text flying upward and for a short time and disappearing"""
-        if alpha_start != alpha_end:
-            alphadiff = alpha_start - alpha_end
-            self.alpha_diff_per_second = alphadiff / max_age  # assumes age = 0 at start for alpha calculation
+        """Create a flying VectorSprite with text that disappears after a while
+
+        :param pygame.math.Vector2 pos:     startposition in Pixel. To attach the text to another Sprite, use an existing Vector.
+        :param pygame.math.Vector2 move:    movevector in Pixel per second
+        :param text:                        the text to render. accept unicode chars
+        :param (int,int,int) color:         foregroundcolor for text
+        :param (int,int,int) bgcolor:       backgroundcolor for text. If set to None, black is the transparent color
+        :param float max_age:               lifetime of Flytext in seconds. Delete itself when age > max_age
+        :param float age:                   start age in seconds. If negative, Flytext stay invisible until age >= 0
+        :param float acceleration_factor:   1.0 for no acceleration. > 1 for acceleration of move Vector, < 1 for negative acceleration
+        :param int fontsize:                fontsize for text
+        :param float textrotation:          static textrotation in degree for rendering text.
+        :param int style:                   effect for text rendering, see pygame.freetype constants
+        :param int alpha_start:             alpha value for age =0. 255 is no transparency, 0 is full transparent
+        :param int alpha_end:               alpha value for age = max_age.
+        :param int width_start:              start value for dynamic zooming of width in pixel
+        :param int width_end:                end value for dynamic zooming of width in pixel
+        :param int height_start:             start value for dynamic zooming of height in pixel
+        :param int height_end:               end value for dynamic zooming of height in pixel
+        :param float rotate_start:          start angle for dynamic rotation of the whole Flytext Sprite
+        :param float rotate_end:            end angle for dynamic rotation
+        :return: None
+        """
+
+        self.recalc_each_frame = False
+        self.text = text
+        self.alpha_start = alpha_start
+        self.alpha_end = alpha_end
+        self.alpha_diff_per_second = alpha_start - alpha_end / max_age  # assumes age = 0 at start for alpha calculation
+        self.style = style
+        self.acceleration_factor = acceleration_factor
+        self.fontsize = fontsize
+        self.textrotation = textrotation
+        self.color = color
+        self.bgcolor = bgcolor
+        self.width_start = width_start
+        self.width_end = width_end
+        self.height_start = height_start
+        self.height_end = height_end
+        if width_start is not None:
+            self.width_diff_per_second = (width_end - width_start) / max_age
+            self.recalc_each_frame = True
+        else:
+            self.width_diff_per_second = 0
+        if height_start is not None:
+            self.height_diff_per_second = (height_end - height_start) / max_age
+            self.recalc_each_frame = True
+        else:
+            self.height_diff_per_second = 0
+        self.rotate_start = rotate_start
+        self.rotate_end = rotate_end
+        if (rotate_start != 0 or rotate_end != 0) and rotate_start != rotate_end:
+            self.rotate_diff_per_second = ( rotate_end - rotate_start) / max_age
+            self.recalc_each_frame = True
+        else:
+            self.rotate_diff_per_second = 0
+
 
         VectorSprite.__init__(
             self,
+            color = color,
             pos=pos,
             move=move,
-            text=text,
-            color=color,
             max_age=max_age,
             age=age,
-            acceleration_factor=acceleration_factor,
-            fontsize=fontsize,
-            textrotation=textrotation,
-            bgcolor=bgcolor,
-            style=style,
-            alpha_start=alpha_start,
-            alpha_end=alpha_end,
         )
         self._layer = 7  # order of sprite layers (before / behind other sprites)
 
@@ -318,31 +371,66 @@ class Flytext(VectorSprite):
 
     def create_image(self):
         myfont = Viewer.font
-        text, textrect = myfont.render(
+        #text, textrect = myfont.render(
+        #fgcolor=self.color,
+        #bgcolor=self.bgcolor,
+        #get_rect(text, style=STYLE_DEFAULT, rotation=0, size=0) -> rect
+        textrect = myfont.get_rect(
             text=self.text,
-            fgcolor=self.color,
-            bgcolor=self.bgcolor,
             size=self.fontsize,
             rotation=self.textrotation,
             style=self.style,
         )  # font 22
-        self.image = text
+        self.image = pygame.Surface((textrect.width, textrect.height))
+        #render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
+        textrect = myfont.render_to(
+            surf=self.image,
+            dest = (0,0),
+            text = self.text,
+            fgcolor = self.color,
+            bgcolor = self.bgcolor,
+            style=self.style,
+            rotation=self.textrotation,
+            size=self.fontsize)
+        if self.bgcolor is None:
+            self.image.set_colorkey((0,0,0))
+
         self.rect = textrect
+        # transparcent ?
         if self.alpha_start == self.alpha_end == 255:
             pass
         elif self.alpha_start == self.alpha_end:
             self.image.set_alpha(self.alpha_start)
-            print("fix alpha", self.alpha_start)
+            #print("fix alpha", self.alpha_start)
         else:
             self.image.set_alpha(self.alpha_start - self.age * self.alpha_diff_per_second)
-            print("alpha:", self.alpha_start - self.age * self.alpha_diff_per_second)
-        self.image = self.image.convert_alpha()
-        # self.rect.center = (-400,-400) # if you leave this out the Flytext is stuck in the left upper corner at 0,0
+            #print("alpha:", self.alpha_start - self.age * self.alpha_diff_per_second)
+        self.image.convert_alpha()
+        # save the rect center for zooming and rotating
+        oldcenter = self.image.get_rect().center
+        # dynamic zooming ?
+        if self.width_start is not None or self.height_start is not None:
+            if self.width_start is None:
+                self.width_start = textrect.width
+            if self.height_start is None:
+                self.height_start = textrect.height
+            w = self.width_start + self.age * self.width_diff_per_second
+            h = self.height_start + self.age * self.height_diff_per_second
+            self.image = pygame.transform.scale(self.image, (int(w),int(h)) )
+        # rotation?
+        if self.rotate_start != 0 or self.rotate_end != 0:
+            if self.rotate_diff_per_second == 0:
+                self.image = pygame.transform.rotate(self.image,self.rotate_start)
+            else:
+                self.image = pygame.transform.rotate(self.image, self.rotate_start + self.age * self.rotate_diff_per_second)
+        # restore the old center after zooming and rotating
+        self.rect = self.image.get_rect()
+        self.rect.center = oldcenter
         self.rect.center = (int(round(self.pos.x,0)), int(round(self.pos.y,0)))
 
     def update(self, seconds):
         self.move *= self.acceleration_factor
-        if self.alpha_start != self.alpha_end:
+        if self.recalc_each_frame:
             self.create_image()
         VectorSprite.update(self, seconds)
 
@@ -2284,9 +2372,21 @@ class Viewer:
         pygame.display.set_caption("pipe_rogue version:".format(version))
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
+            move=pygame.math.Vector2(0,-5),
             text="Enjoy pipe_rogue!",
             fontsize=64,
-            max_age=6,
+            max_age=8,
+            bgcolor=None,
+            alpha_start=255,
+            alpha_end=255,
+            width_start = None,
+            width_end = None,
+            height_start = 200,
+            height_end = 100,
+            rotate_start= 0,
+            rotate_end = 45,
+
+
         )
         # Flytext(text="press h for help", age=-2)
         # self.screen_backup = self.screen.copy()
