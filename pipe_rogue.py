@@ -924,7 +924,6 @@ class Game:
         hero = Game.player
         # tile = Game.dungeon[hero.z][hero.y][hero.x]
 
-
         # --------- move the hero --------------
         text.extend(self.move(hero, dx, dy))  # test if move is legal and move
         # found stair?
@@ -954,8 +953,14 @@ class Game:
                     "You found an open door. You can press [c] to close it (re-opening possible without key)"
                 )
             # ---- detecting nearby traps ----
-            for t in [t for t in Game.items.values() if t.z == hero.z and isinstance(t, Trap) and t.x == hero.x + nx and
-                      t.y == hero.y + ny   ]:
+            for t in [
+                t
+                for t in Game.items.values()
+                if t.z == hero.z
+                and isinstance(t, Trap)
+                and t.x == hero.x + nx
+                and t.y == hero.y + ny
+            ]:
                 if not t.detected:
                     if t.calculate_detect():
                         t.detected = True
@@ -963,8 +968,6 @@ class Game:
         # for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
         #    text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
         #    Flytext(tx=e.tx, ty=e.ty, text = f"- {e.damage} hp", color=(222,0,0), fontsize=32)
-
-
 
         # triggering a trap (traps are items) or
         # (auto)picking up item at current position
@@ -1390,6 +1393,48 @@ class Door(Structure):
         return Door.fovpicture_open
 
 
+class Glass(Structure):
+    """looking through is possible, shooting and walking is not"""
+    # USE font instead of freetype so that doors get not expanded (ugly)
+    fgcolor = (200, 255, 250) # cyan-white
+    nesw_tile = "#"  # wall. a wall can only be between walls
+    block_sight = False
+    block_movement = True
+    block_shooting = True  # set false for grille door etc.
+
+    @classmethod
+    def create_pictures(cls):
+        cls.exploredpicture_v = make_text("|", Viewer.explored_fgcolor)
+        cls.exploredpicture_h = make_text("-", Viewer.explored_fgcolor)
+        cls.fovpicture_v = make_text("|", cls.fgcolor)
+        cls.fovpicture_h = make_text("-", cls.fgcolor)
+
+
+    def __init__(self, nesw):
+        super().__init__(nesw)
+        if nesw[0] and nesw[2]:  # wall north and south
+            self.char = "|"
+        elif nesw[1] and nesw[3]:  # wall east and west
+            self.char = "-"
+        #self.closed = True
+
+
+    def exploredpicture(self):
+
+        if self.char == "|":
+            return self.exploredpicture_v
+        if self.char == "-":
+            return self.exploredpicture_h
+
+
+    def fovpicture(self):
+            if self.char == "|":
+                return self.fovpicture_v
+            if self.char == "-":
+                return self.fovpicture_h
+
+
+
 class StairDown(Structure):
 
     fgcolor = (150, 50, 90)  # dark pink
@@ -1555,7 +1600,6 @@ class Trap(Item):
         if random.random() < self.chance_to_detect:
             return True
         return False
-
 
     def calculate_damage(self):
         """damage the traps inflicts on player (or Monster)"""
@@ -2001,7 +2045,7 @@ class Viewer:
                 elif isinstance(tile, Door):
                     color = (0, 64, 0)
                 else:
-                    color = (255, 2550, 0)  # alarm for unknow tile
+                    color = (255, 255, 0)  # alarm for unknow tile
                 pygame.draw.rect(
                     self.radarscreen,
                     color,
@@ -3062,6 +3106,7 @@ legend = {
     ">": StairDown,
     "<": StairUp,
     "d": Door,
+    "g": Glass,
     "@": Player,
     "M": Monster,
     "D": Dragon,
@@ -3078,7 +3123,7 @@ level1 = """
 #@#...#.k.d....#............$.....M..#
 #>TTT#....#........#..###...#...#....#
 ##.#.#ff..####.#...####....###.......#
-#.$$.M.....ß.#.#....#...ff..#...$....#
+#.$$.M....gß.#.#....#...ff..#...$....#
 ######################################"""
 
 # insert in level2: W for Waterguy, S for Skydragon
