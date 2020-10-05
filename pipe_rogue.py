@@ -32,8 +32,9 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: make trap-detect -radius for player
+# TODO: game menu, death of player -> newstart
 # TODO: items visible below monsters/player ?
-
 # TODO: shooting through walls is possible?!
 # TODO: include pathfinding from test
 # TODO: save levels to pickle, load levels when changing player.z
@@ -921,12 +922,11 @@ class Game:
         Game.turn_number += 1
         text = []
         hero = Game.player
-        #tile = Game.dungeon[hero.z][hero.y][hero.x]
-        # ----- suffer damage from effects before moving away
+        # tile = Game.dungeon[hero.z][hero.y][hero.x]
 
 
         # --------- move the hero --------------
-        text.extend(self.move(hero, dx, dy)) # test if move is legal and move
+        text.extend(self.move(hero, dx, dy))  # test if move is legal and move
         # found stair?
         tile = Game.dungeon[hero.z][hero.y][hero.x]
         if isinstance(tile, StairDown):
@@ -953,34 +953,40 @@ class Game:
                 text.append(
                     "You found an open door. You can press [c] to close it (re-opening possible without key)"
                 )
+            # ---- detecting nearby traps ----
+            for t in [t for t in Game.items.values() if t.z == hero.z and isinstance(t, Trap) and t.x == hero.x + nx and
+                      t.y == hero.y + ny   ]:
+                if not t.detected:
+                    if t.calculate_detect():
+                        t.detected = True
         # ------------- iterating over (damage) effects at player position ------
-        #for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
+        # for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
         #    text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
         #    Flytext(tx=e.tx, ty=e.ty, text = f"- {e.damage} hp", color=(222,0,0), fontsize=32)
 
-        # ---- detecting nearby traps ----
-        #for i in
+
 
         # triggering a trap (traps are items) or
         # (auto)picking up item at current position
-        #items = [
+        # items = [
         #    i
         #    for i in Game.items.values()
         #    if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack
-        #]#
+        # ]#
 
-        #------------ iterate over items at player position --------------------
-        for i in [ i  for i in Game.items.values()  if i.z == hero.z and i.x == hero.x and i.y == hero.y
-                    and not i.backpack]:
+        # ------------ iterate over items at player position --------------------
+        for i in [
+            i
+            for i in Game.items.values()
+            if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack
+        ]:
             #  ----------------- trap ------------------------
             if isinstance(i, Trap):
                 damage = i.calculate_damage()
                 hero.hp -= damage
 
-                text.append(
-                    f"You trigger a trap and loose {damage} hp."
-                )
-                i.effect(damage) # skull and bones effect from trap, -hp flysprite
+                text.append(f"You trigger a trap and loose {damage} hp.")
+                i.text_effect(damage)  # skull and bones effect from trap, -hp flysprite
                 # delete trap?
                 if i.calculate_destroy():
                     text.append("the trap is destroyed")
@@ -1005,9 +1011,12 @@ class Game:
             text.extend(self.move(m, dxm, dym))
         # ---- calculate if player suffer from monster shooting ----
         # ------------- iterating over (damage) effects at player position ------
-        for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
-            text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
-            Flytext(tx=e.tx, ty=e.ty, text=f"- {e.damage} hp", color=(222, 0, 0), fontsize=32)
+        for e in [
+            e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y
+        ]:
+            damage = e.damage
+            text.append(f"You suffer {damage} {e.__class__.__name__} damage")
+            e.text_effect(damage)
             hero.hp -= e.damage
         # cleanup code, remove dead monsters:
         for m in [m for m in Game.zoo.values() if m.hp <= 0]:
@@ -1042,7 +1051,7 @@ class Effect:
     pictures = []  # for animation
     anim_cycle = 6  # how many pictures per second the animation should display
     wobble = False  # if effect dances around center of tile each frame some pixel. can be False or Tuple(x,y)
-    damage = 0 # fixed damage, overwrite by child classes
+    damage = 0  # fixed damage, overwrite by child classes
 
     @classmethod
     def create_pictures(cls):
@@ -1113,6 +1122,15 @@ class Effect:
         i = int(self.seconds / (1 / self.anim_cycle) % pics)  #
         return self.pictures[i]
 
+    def text_effect(self, damage):
+        Flytext(
+            tx=self.tx,
+            ty=self.ty,
+            text=f"{self.__class__.__name__}: -{damage} hp",
+            color=(222, 0, 0),
+            fontsize=32,
+        )
+
 
 class Fire(Effect):
 
@@ -1150,7 +1168,6 @@ class Water(Effect):
                 Water.pictures.append(pic)
             else:  # the second half (descending)            x     y
                 Water.pictures.append(pygame.transform.flip(pic, False, True))
-
 
 
 class Flash(Effect):
@@ -1520,26 +1537,36 @@ class Trap(Item):
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
-        self.damage = "2d4" # 2 x 4-sided dice without re-roll -> result between 4 and 8
+        self.damage = (
+            "2d4"  # 2 x 4-sided dice without re-roll -> result between 4 and 8
+        )
         self.name = "spike trap"
         self.detected = False
         self.disarmed = False
         self.chance_to_destroy = 0.4
+        self.chance_to_detect = 0.33
 
     def calculate_destroy(self):
         if random.random() < self.chance_to_destroy:
             return True
         return False
 
+    def calculate_detect(self):
+        if random.random() < self.chance_to_detect:
+            return True
+        return False
+
+
     def calculate_damage(self):
         """damage the traps inflicts on player (or Monster)"""
         if self.disarmed:
             return 0
         return throw_dice(*dice_from_string(self.damage))
-        #return       #random.randint(1, 6)
+        # return       #random.randint(1, 6)
 
-    def effect(self, damage):
+    def text_effect(self, damage):
         px, py = Viewer.tile_to_pixel((self.x, self.y))
+        # white skull on black ground, fading out
         Flytext(
             pos=pygame.math.Vector2(px, py),
             move=pygame.math.Vector2(0, -1),
@@ -1552,10 +1579,11 @@ class Trap(Item):
             alpha_start=255,
             alpha_end=0,
         )
+        # red hp, flying up
         Flytext(
             pos=pygame.math.Vector2(px, py),
             move=pygame.math.Vector2(0, -20),
-            text=f"-{damage} hp",
+            text=f"Trap: -{damage} hp",
             color=(200, 0, 0),
             fontsize=32,
             acceleration_factor=1.00,
@@ -2499,7 +2527,11 @@ class Viewer:
                         if event.key == pygame.K_d and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(1, 0))
                             repaint = True
-                        if event.key == (pygame.K_SPACE or event.key == pygame.K_RETURN) and len(self.flytextgroup) == 0:
+                        if (
+                            event.key
+                            == (pygame.K_SPACE or event.key == pygame.K_RETURN)
+                            and len(self.flytextgroup) == 0
+                        ):
                             self.loglines.extend(self.g.turn(0, 0))
                             repaint = True
                         if event.key == pygame.K_c and len(self.flytextgroup) == 0:
@@ -2523,14 +2555,16 @@ class Viewer:
                                 ##print("down key pressed")
                                 self.loglines.extend(self.g.climb_down())
                                 repaint = True
-                        elif event.key == pygame.K_LESS and len(self.flytextgroup) == 0:  # climb up
+                        elif (
+                            event.key == pygame.K_LESS and len(self.flytextgroup) == 0
+                        ):  # climb up
                             self.loglines.extend(self.g.climb_up())
                             repaint = True
 
                         # ----------------------
 
             # ------------ pressed keys ------
-            #pressed_keys = pygame.key.get_pressed()
+            # pressed_keys = pygame.key.get_pressed()
 
             # ------ mouse handler ------
             left, middle, right = pygame.mouse.get_pressed()
@@ -2597,7 +2631,7 @@ class Viewer:
                 # ----- fly arrow
                 FlyingObject(start_tile=points[0], end_tile=points[-1])
                 selection = None
-                self.loglines.extend(self.g.turn(0, 0)) # waste a turn for shooting
+                self.loglines.extend(self.g.turn(0, 0))  # waste a turn for shooting
                 repaint = True
 
             # ---- update -----------------
@@ -2849,23 +2883,23 @@ def make_text(
 
 def throw_dice(dice=1, reroll=True, sides=6, correction=0):
     """returns the sum of dice throws, the sides begin with number 1
-       if a 6 (or hightest side number) is rolled AND reroll==True,
-       then sides-1 is counted and another roll is made and added
-       (can be repeated if another 6 is rolled).
-       example:
-       roll 5 -> 5
-       roll 6, reroll 1 -> 5+1 = 6
-       roll 6, reroll 6, reroll 3 -> 5 + 5 + 3 = 13
-       correction is added (subtracted) to the end sum, after all rerolls
-       important:
-       expecting random module imported in this module
-       ##expect rng = np.random.default_rng() declared before call
-       calculate from string using:
-       result = throw_dice(*dice_from_string(a.attack))
+    if a 6 (or hightest side number) is rolled AND reroll==True,
+    then sides-1 is counted and another roll is made and added
+    (can be repeated if another 6 is rolled).
+    example:
+    roll 5 -> 5
+    roll 6, reroll 1 -> 5+1 = 6
+    roll 6, reroll 6, reroll 3 -> 5 + 5 + 3 = 13
+    correction is added (subtracted) to the end sum, after all rerolls
+    important:
+    expecting random module imported in this module
+    ##expect rng = np.random.default_rng() declared before call
+    calculate from string using:
+    result = throw_dice(*dice_from_string(a.attack))
     """
     total = 0
     for d in range(dice):
-        #roll = rng.integers(1,sides,1, endpoint=True)
+        # roll = rng.integers(1,sides,1, endpoint=True)
         roll = random.randint(1, sides)
         ##print(roll)
         if not reroll:
@@ -2875,57 +2909,57 @@ def throw_dice(dice=1, reroll=True, sides=6, correction=0):
             ##total+=roll[0]
             total += roll
         else:
-            #print("re-rolling...")
+            # print("re-rolling...")
             total += sides - 1
-            total += dicethrow(1, reroll,  sides) # + correction already here??
+            total += dicethrow(1, reroll, sides)  # + correction already here??
     return total + correction
 
 
 def dice_from_string(dicestring="1d6+0"):
     """expecting a dicestring in the format:
-       {dice}d{sides}+{correction}
-       examples:
-       1d6+0 ... one 6 sided die without re-roll
-       2D6+0 ... two 6-sided dice with reroll
-       1d20+1 ... one 20-sided die, correction value +1
-       3D6-2 ... three 6-sided dice with reroll, sum has correction value of -2
-       where:
-       d........means dice without re-roll
-       D........means dice with re-roll (1D6 count as 5 + the reroll value)
-       {dice} ...means number of dice throws, 2d means 2 dice etc. the sum of all throws is returned. must be integer
-       {sides} ...means mumber of sides per die dice. d20 means 20-sided dice etc. must be integer
-       {correction}.......means correction value that is added (subtracted) to the sum of all throws. must be integer
+    {dice}d{sides}+{correction}
+    examples:
+    1d6+0 ... one 6 sided die without re-roll
+    2D6+0 ... two 6-sided dice with reroll
+    1d20+1 ... one 20-sided die, correction value +1
+    3D6-2 ... three 6-sided dice with reroll, sum has correction value of -2
+    where:
+    d........means dice without re-roll
+    D........means dice with re-roll (1D6 count as 5 + the reroll value)
+    {dice} ...means number of dice throws, 2d means 2 dice etc. the sum of all throws is returned. must be integer
+    {sides} ...means mumber of sides per die dice. d20 means 20-sided dice etc. must be integer
+    {correction}.......means correction value that is added (subtracted) to the sum of all throws. must be integer
 
-       returns [dice, recroll, sides, correction]
-       """
+    returns [dice, recroll, sides, correction]
+    """
     # checking if string is correct
-    dicestring = dicestring.strip() # remove leading and trailing blanks
+    dicestring = dicestring.strip()  # remove leading and trailing blanks
     if dicestring.lower().count("d") != 1:
-        raise ValueError("none or more than one d (or D) found in: "+dicestring)
+        raise ValueError("none or more than one d (or D) found in: " + dicestring)
     dpos = dicestring.lower().find("d")
     reroll = True if dicestring[dpos] == "D" else False
-    #try:
+    # try:
     dice = int(dicestring[:dpos])
-    #except ValueError:
-    #return [None,None,None,None], "integer value before d is missing in: " + dicestring
-    rest = dicestring[dpos+1:]
+    # except ValueError:
+    # return [None,None,None,None], "integer value before d is missing in: " + dicestring
+    rest = dicestring[dpos + 1 :]
     seperator = "+" if "+" in rest else ("-" if "-" in rest else None)
     if seperator is not None:
-        #try:
-        sides = int(rest[:rest.find(seperator)])
-        #except ValueError:
+        # try:
+        sides = int(rest[: rest.find(seperator)])
+        # except ValueError:
         #    return [None,None,None,None], "integer value after d is missing in: " + dicestring
-        #try:
-        correction = int(rest[rest.find(seperator):])
-        #except ValueError:
+        # try:
+        correction = int(rest[rest.find(seperator) :])
+        # except ValueError:
         #    return [None,None,None,None], "integer value afer + (or -) is missing in: " + dicestring
     else:
-        #try:
+        # try:
         sides = int(rest)
-        #except ValueError:
+        # except ValueError:
         #    return [None, None, None, None], "integer value after d is missing in: " + dicestring
         correction = 0
-    #print("dice {} sides {} correction {}".format(dice, sides, correction))
+    # print("dice {} sides {} correction {}".format(dice, sides, correction))
     return [dice, reroll, sides, correction]
 
 
