@@ -809,8 +809,11 @@ class Game:
         target = Game.dungeon[monster.z][monster.y + dy][monster.x + dx]
         legal = True  # we assume it is possible to move there
         text = []
-        if isinstance(target, Wall):  # same as target.__class__.__name__
-            legal = False
+        #if isinstance(target, Wall):  # same as target.__class__.__name__
+        #    legal = False
+        if not isinstance(target, Door):
+            if target.block_movement:
+                legal = False
         if isinstance(target, Door) and target.closed:
             legal = False
             if isinstance(monster, Player):
@@ -1138,7 +1141,7 @@ class Effect:
 class Fire(Effect):
 
     pictures = []
-    char = "*"
+    char = "\U0001F525" #"*"
     wobble = (0, 0)
     # text = "Fire"
     fgcolor = (255, 0, 0)  # for panelinfo
@@ -1395,9 +1398,10 @@ class Door(Structure):
 
 class Glass(Structure):
     """looking through is possible, shooting and walking is not"""
+
     # USE font instead of freetype so that doors get not expanded (ugly)
-    fgcolor = (200, 255, 250) # cyan-white
-    nesw_tile = "#"  # wall. a wall can only be between walls
+    fgcolor = (200, 255, 250)  # cyan-white
+    nesw_tile = "g"  # glass neighbor tile
     block_sight = False
     block_movement = True
     block_shooting = True  # set false for grille door etc.
@@ -1409,15 +1413,13 @@ class Glass(Structure):
         cls.fovpicture_v = make_text("|", cls.fgcolor)
         cls.fovpicture_h = make_text("-", cls.fgcolor)
 
-
     def __init__(self, nesw):
         super().__init__(nesw)
-        if nesw[0] and nesw[2]:  # wall north and south
+        if nesw[0] and nesw[2]:  # glass north and south
             self.char = "|"
         elif nesw[1] and nesw[3]:  # wall east and west
             self.char = "-"
-        #self.closed = True
-
+        # self.closed = True
 
     def exploredpicture(self):
 
@@ -1426,13 +1428,11 @@ class Glass(Structure):
         if self.char == "-":
             return self.exploredpicture_h
 
-
     def fovpicture(self):
-            if self.char == "|":
-                return self.fovpicture_v
-            if self.char == "-":
-                return self.fovpicture_h
-
+        if self.char == "|":
+            return self.fovpicture_v
+        if self.char == "-":
+            return self.fovpicture_h
 
 
 class StairDown(Structure):
@@ -1561,11 +1561,13 @@ class Key(Item):
 
     pictures = []
     fgcolor = (255, 255, 255)
-    char = "k"
+    char = "\U0001F511"  # key #"k"
 
     @classmethod
     def create_pictures(cls):
-        cls.pictures.append(Viewer.images["key"])
+        cls.pictures.append(make_text(
+            cls.char, (200, 200, 0), style=pygame.freetype.STYLE_STRONG
+        ))
 
 
 class Trap(Item):
@@ -1933,7 +1935,8 @@ class Viewer:
         # ---- pygame init
         pygame.init()
         # Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
-        fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
+        #fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
+        fontfile = os.path.join("data", "fonts", "Symbola605.ttf")
         Viewer.monofontfilename = os.path.join("data", "fonts", "FreeMonoBold.otf")
         Viewer.font = pygame.freetype.Font(fontfile)
         # Viewer.monofont = pygame.freetype.Font(monofontfile)
@@ -3122,7 +3125,7 @@ level1 = """
 ######################################
 #@#...#.k.d....#............$.....M..#
 #>TTT#....#........#..###...#...#....#
-##.#.#ff..####.#...####....###.......#
+##.#.#ff..#gg#.#...####....###.......#
 #.$$.M....gß.#.#....#...ff..#...$....#
 ######################################"""
 
