@@ -32,10 +32,8 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
-# TODO: turn system each effect must finish before next turn starts
-# TODO: less max_age for effects (Trap, fight)
-# TODO: import dice functions with re-roll, use for Trap damage
-# TODO: Trap code should respect Trap.__init__ for damage etc
+# TODO: items visible below monsters/player ?
+
 # TODO: shooting through walls is possible?!
 # TODO: include pathfinding from test
 # TODO: save levels to pickle, load levels when changing player.z
@@ -48,11 +46,15 @@ unicode tables:
 # TODO: minimalspeed für Arrow, soll trotzdem am target_tile verschwinden - max_distance
 # TODO: (autohiding) hint/button in panel when player at stair and up/down command is possible
 # TODO: Monster movement: actualy move (sprites) instead of teleport tiles. Fixed time (0.5 sec) for all movements?
-# TODO: better battle impact effects
 # TODO: Monster moving toward each other when fighting
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: turn system - each effect must finish before next turn starts
+# done: less max_age for effects (Trap, fight) -> 1 second max_age for Flytext
+# done: import dice functions with re-roll, use for Trap damage
+# done: Trap code should respect Trap.__init__ for damage etc
+# done: better battle impact effects
 # done: set_alpha , transparency for Flytext sprite. (setalpha works only with freetye.render_to, not with freetype.render
 # done: fat skull for trap -> STRONG textstyle for Flytext
 # done: in Viewer.load_images, iterate over all subclasses of Structure automatically
@@ -277,14 +279,14 @@ class VectorSprite(pygame.sprite.Sprite):
 class Flytext(VectorSprite):
     def __init__(
         self,
-        tx = None,
-        ty = None,
+        tx=None,
+        ty=None,
         pos=pygame.math.Vector2(50, 50),
         move=pygame.math.Vector2(0, -50),
         text="hallo",
         color=(255, 0, 0),
         bgcolor=None,
-        max_age=2,
+        max_age=1,
         age=0,
         acceleration_factor=1.0,
         fontsize=22,
@@ -334,7 +336,7 @@ class Flytext(VectorSprite):
         self.text = text
         self.alpha_start = alpha_start
         self.alpha_end = alpha_end
-        self.alpha_diff_per_second = ( alpha_start - alpha_end) / max_age
+        self.alpha_diff_per_second = (alpha_start - alpha_end) / max_age
         if alpha_end != alpha_start:
             self.recalc_each_frame = True
         self.style = style
@@ -915,17 +917,16 @@ class Game:
         return [f"you eat food and regain {quality} hp"]
 
     def turn(self, dx, dy):
+        """the player makes a new turn (including move command)"""
         Game.turn_number += 1
         text = []
         hero = Game.player
-        tile = Game.dungeon[hero.z][hero.y][hero.x]
-        # recalc_fov = True
-        # test if move is legal and move
-        text.extend(self.move(hero, dx, dy))
-        # ------- trigger ----
-        ##if hero.z == 0 and hero.y == 4 and hero.x==1:
-        ##    Flytext(text="Servus, trigger 1 getriggert")
+        #tile = Game.dungeon[hero.z][hero.y][hero.x]
+        # ----- suffer damage from effects before moving away
 
+
+        # --------- move the hero --------------
+        text.extend(self.move(hero, dx, dy)) # test if move is legal and move
         # found stair?
         tile = Game.dungeon[hero.z][hero.y][hero.x]
         if isinstance(tile, StairDown):
@@ -952,31 +953,49 @@ class Game:
                 text.append(
                     "You found an open door. You can press [c] to close it (re-opening possible without key)"
                 )
+        # ------------- iterating over (damage) effects at player position ------
+        #for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
+        #    text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
+        #    Flytext(tx=e.tx, ty=e.ty, text = f"- {e.damage} hp", color=(222,0,0), fontsize=32)
+
+        # ---- detecting nearby traps ----
+        #for i in
+
         # triggering a trap (traps are items) or
         # (auto)picking up item at current position
-        items = [
-            i
-            for i in Game.items.values()
-            if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack
-        ]
-        for i in items:
+        #items = [
+        #    i
+        #    for i in Game.items.values()
+        #    if i.z == hero.z and i.x == hero.x and i.y == hero.y and not i.backpack
+        #]#
+
+        #------------ iterate over items at player position --------------------
+        for i in [ i  for i in Game.items.values()  if i.z == hero.z and i.x == hero.x and i.y == hero.y
+                    and not i.backpack]:
+            #  ----------------- trap ------------------------
             if isinstance(i, Trap):
                 damage = i.calculate_damage()
                 hero.hp -= damage
-                del Game.items[i.number]
+
                 text.append(
-                    f"You run into a trap and loose {damage} hp."
-                    " The trap is destroyed"
+                    f"You trigger a trap and loose {damage} hp."
                 )
-                i.effect(damage)
+                i.effect(damage) # skull and bones effect from trap, -hp flysprite
+                # delete trap?
+                if i.calculate_destroy():
+                    text.append("the trap is destroyed")
+                    del Game.items[i.number]
+                else:
+                    text.append("the trap is still active! Move away from here!")
 
             else:
+                # ---------------- non-trap, item to pickup ------------------
                 text.append(f"you pick up: {type(i).__name__}")
                 i.backpack = True
                 ## create Bubble effect here
                 i.pickupeffect()
 
-        # move the Monsters
+        # move the Monsters (and let monsters shoot at player)
         for m in [
             m
             for m in Game.zoo.values()
@@ -984,6 +1003,12 @@ class Game:
         ]:
             dxm, dym = m.ai()
             text.extend(self.move(m, dxm, dym))
+        # ---- calculate if player suffer from monster shooting ----
+        # ------------- iterating over (damage) effects at player position ------
+        for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
+            text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
+            Flytext(tx=e.tx, ty=e.ty, text=f"- {e.damage} hp", color=(222, 0, 0), fontsize=32)
+            hero.hp -= e.damage
         # cleanup code, remove dead monsters:
         for m in [m for m in Game.zoo.values() if m.hp <= 0]:
             if m.number == hero.number:
@@ -1017,6 +1042,7 @@ class Effect:
     pictures = []  # for animation
     anim_cycle = 6  # how many pictures per second the animation should display
     wobble = False  # if effect dances around center of tile each frame some pixel. can be False or Tuple(x,y)
+    damage = 0 # fixed damage, overwrite by child classes
 
     @classmethod
     def create_pictures(cls):
@@ -1095,6 +1121,7 @@ class Fire(Effect):
     wobble = (0, 0)
     # text = "Fire"
     fgcolor = (255, 0, 0)  # for panelinfo
+    damage = 4
 
     @classmethod
     def create_pictures(cls):
@@ -1102,14 +1129,7 @@ class Fire(Effect):
         colorvalues = list(range(128, 256, 16))
         random.shuffle(colorvalues)
         for c in colorvalues:
-            # Fire.pictures.append(make_text(Fire.char, font_color=(255,c,0), font_size=64, max_gridsize=Viewer.gridsize))
             Fire.pictures.append(make_text(Fire.char, (255, c, 0)))
-
-    # def __init__(self, tx, ty, age = 0, max_age = None, dx=0, dy=0 ):
-    #    super().__init__(tx, ty, age, max_age, dx, dy)
-    #    self.char = "*"
-    #    self.text = "Fire"
-    #    self.fgcolor = (255,0,0)
 
 
 class Water(Effect):
@@ -1118,6 +1138,7 @@ class Water(Effect):
     char = "\u2248"  # double wave instead of "~"
     fgcolor = (0, 0, 255)
     anim_cycle = 4
+    damage = 3
 
     @classmethod
     def create_pictures(cls):
@@ -1130,11 +1151,6 @@ class Water(Effect):
             else:  # the second half (descending)            x     y
                 Water.pictures.append(pygame.transform.flip(pic, False, True))
 
-    # def __init__(self, x, y, age=0, max_age=None, dx=0, dy=0):
-    #    super().__init__(x, y, age, max_age, dx, dy )
-    #    self.char = "~"
-    #    self.text = "Water"
-    #    self.fgcolor = (0, 0, 255)
 
 
 class Flash(Effect):
@@ -1143,6 +1159,7 @@ class Flash(Effect):
     char = "\u26A1"
     fgcolor = (0, 200, 200)  # cyan
     anim_cycle = 25  # so many pictures per second
+    damage = 2
 
     @classmethod
     def create_pictures(cls):
@@ -1503,7 +1520,7 @@ class Trap(Item):
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
-        self.damage_dice = "2d4"
+        self.damage = "2d4" # 2 x 4-sided dice without re-roll -> result between 4 and 8
         self.name = "spike trap"
         self.detected = False
         self.disarmed = False
@@ -1516,19 +1533,22 @@ class Trap(Item):
 
     def calculate_damage(self):
         """damage the traps inflicts on player (or Monster)"""
-        return random.randint(1, 6)
+        if self.disarmed:
+            return 0
+        return throw_dice(*dice_from_string(self.damage))
+        #return       #random.randint(1, 6)
 
     def effect(self, damage):
         px, py = Viewer.tile_to_pixel((self.x, self.y))
         Flytext(
             pos=pygame.math.Vector2(px, py),
-            move=pygame.math.Vector2(0, 0),
+            move=pygame.math.Vector2(0, -1),
             text=self.char,
             color=(255, 255, 255),
             bgcolor=(2, 2, 2),
             fontsize=100,
             acceleration_factor=1.01,
-            max_age=4,
+            max_age=0.5,
             alpha_start=255,
             alpha_end=0,
         )
@@ -1539,7 +1559,7 @@ class Trap(Item):
             color=(200, 0, 0),
             fontsize=32,
             acceleration_factor=1.00,
-            max_age=4,
+            max_age=1,
         )
 
 
@@ -1860,6 +1880,7 @@ class Viewer:
         self.clock = pygame.time.Clock()
         self.fps = 60
         self.playtime = 0.0
+        self.cursormode = False
 
         # ------ background images ------
         self.backgroundfilenames = []  # every .jpg or .jpeg file in the folder 'data'
@@ -2391,7 +2412,7 @@ class Viewer:
         running = True
         repaint = True
         text = []
-        cursormode = False
+        self.cursormode = False
         selection = None
         hero = Game.player
         # pygame.mouse.set_visible(False)
@@ -2402,7 +2423,7 @@ class Viewer:
             move=pygame.math.Vector2(0, -15),
             text="Enjoy pipe_rogue!",
             fontsize=64,
-            max_age=4,
+            max_age=2,
             bgcolor=None,
             alpha_start=255,
             alpha_end=0,
@@ -2430,9 +2451,10 @@ class Viewer:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
                         running = False
-                    if cursormode:
+                    if self.cursormode:
+                        # ----------------- in cursormode ----------------------------
                         if event.key == pygame.K_ESCAPE:
-                            cursormode = False
+                            self.cursormode = False
                             # self.cursor.visible = False
                         if (
                             event.key == pygame.K_RETURN
@@ -2440,8 +2462,9 @@ class Viewer:
                         ):
                             selection = self.pixel_to_tile(pygame.mouse.get_pos())
                             print("selected: ", selection)
-                            cursormode = False
+                            self.cursormode = False
                     else:
+                        # -------------- not in cursormode --------------
                         # if event.key == pygame.K_1:
                         #    # testing bluegroup
                         #    cell = self.pixel_to_tile(pygame.mouse.get_pos())
@@ -2450,10 +2473,9 @@ class Viewer:
 
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                        if (
-                            event.key == pygame.K_f
-                        ):  # start selection with cursor (mouse)
-                            cursormode = True
+                        if event.key == pygame.K_f and len(self.flytextgroup) == 0:
+                            # start selection with cursor (mouse)
+                            self.cursormode = True
                             selection = None  # clear old selection
                             # self.cursor.visible=True
                         if event.key == pygame.K_PLUS:
@@ -2465,25 +2487,27 @@ class Viewer:
                         if event.key == pygame.K_MINUS:
                             Viewer.radardot = [max(1, i // 2) for i in Viewer.radardot]
                             self.make_radar()
-                        if event.key == pygame.K_w:
+                        if event.key == pygame.K_w and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(0, -1))
                             repaint = True
-                        if event.key == pygame.K_s:
+                        if event.key == pygame.K_s and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(0, 1))
                             repaint = True
-                        if event.key == pygame.K_a:
+                        if event.key == pygame.K_a and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(-1, 0))
                             repaint = True
-                        if event.key == pygame.K_d:
+                        if event.key == pygame.K_d and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(1, 0))
                             repaint = True
-                        if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        if event.key == (pygame.K_SPACE or event.key == pygame.K_RETURN) and len(self.flytextgroup) == 0:
                             self.loglines.extend(self.g.turn(0, 0))
                             repaint = True
-                        if event.key == pygame.K_c:  # close door
+                        if event.key == pygame.K_c and len(self.flytextgroup) == 0:
+                            # close door
                             self.loglines.extend(self.g.close_door())
                             repaint = True
-                        if event.key == pygame.K_e:  # eat foot
+                        if event.key == pygame.K_e and len(self.flytextgroup) == 0:
+                            # eat foot
                             self.loglines.extend(self.g.eat())
                             repaint = True
                         # ---------- on german keyboard, K_GREATER key is the same as SHIFT and K_LESS
@@ -2494,42 +2518,33 @@ class Viewer:
                             if (
                                 event.key == pygame.K_GREATER
                                 or event.key == pygame.K_LESS
-                            ):
+                            ) and len(self.flytextgroup) == 0:
                                 # if event.key == pygame.K_GREATER: # climb down
                                 ##print("down key pressed")
                                 self.loglines.extend(self.g.climb_down())
                                 repaint = True
-                        elif event.key == pygame.K_LESS:  # climb up
+                        elif event.key == pygame.K_LESS and len(self.flytextgroup) == 0:  # climb up
                             self.loglines.extend(self.g.climb_up())
                             repaint = True
-                        # if event.key == pygame.K_t:
-                        #    Flytext(pos=pygame.math.Vector2(400,400), text="testing", bgcolor=(1,1,1), age=5)
-                        #    # testing
-                        #    pic = pygame.Surface((100,100))
-                        #    pygame.draw.circle(pic, (200,30,50), (50,50), 50)
-                        #    Viewer.font.render_to(pic, ( 20,20), "hallo", (50,200,20), size=22)
-                        #    pic.set_alpha(32)
-                        #    pic.convert_alpha()
-                        #    self.screen.blit(pic,(500,400))
 
                         # ----------------------
 
             # ------------ pressed keys ------
-            pressed_keys = pygame.key.get_pressed()
+            #pressed_keys = pygame.key.get_pressed()
 
             # ------ mouse handler ------
             left, middle, right = pygame.mouse.get_pressed()
-            if not oldleft and left and cursormode:
+            if not oldleft and left and self.cursormode:
                 selection = self.pixel_to_tile(pygame.mouse.get_pos())
                 print("selected: ", selection)
-                cursormode = False
+                self.cursormode = False
 
             oldleft, oldmiddle, oldright = left, middle, right
 
             # -------------------------delete everything on screen--------------------------------------
             # pygame.display.set_caption(str(cursormode))
             # repaint = True
-            if cursormode or len(self.flytextgroup) > 0 or len(self.fxgroup) > 0:
+            if self.cursormode or len(self.flytextgroup) > 0 or len(self.fxgroup) > 0:
                 repaint = True
             if repaint:
                 ## kill old sprites of effects:
@@ -2558,7 +2573,7 @@ class Viewer:
             # ---- clear old effect, paint new effects ----
             self.paint_animation(seconds)
             # ---- update panel with help for tile on cursor -----
-            if not cursormode:
+            if not self.cursormode:
                 self.panelinfo()
 
             # -------------- special effect after cusormode selection -------
@@ -2578,10 +2593,12 @@ class Viewer:
                             # for _ in range(10):
                             px, py = self.tile_to_pixel((point[0], point[1]))
                             p = pygame.math.Vector2(px, py)
-                            Bubble(pos=p, age=-1.0)
+                            Bubble(pos=p, age=-0.5)
                 # ----- fly arrow
                 FlyingObject(start_tile=points[0], end_tile=points[-1])
                 selection = None
+                self.loglines.extend(self.g.turn(0, 0)) # waste a turn for shooting
+                repaint = True
 
             # ---- update -----------------
             self.allgroup.update(seconds)
@@ -2830,6 +2847,88 @@ def make_text(
     return surf
 
 
+def throw_dice(dice=1, reroll=True, sides=6, correction=0):
+    """returns the sum of dice throws, the sides begin with number 1
+       if a 6 (or hightest side number) is rolled AND reroll==True,
+       then sides-1 is counted and another roll is made and added
+       (can be repeated if another 6 is rolled).
+       example:
+       roll 5 -> 5
+       roll 6, reroll 1 -> 5+1 = 6
+       roll 6, reroll 6, reroll 3 -> 5 + 5 + 3 = 13
+       correction is added (subtracted) to the end sum, after all rerolls
+       important:
+       expecting random module imported in this module
+       ##expect rng = np.random.default_rng() declared before call
+       calculate from string using:
+       result = throw_dice(*dice_from_string(a.attack))
+    """
+    total = 0
+    for d in range(dice):
+        #roll = rng.integers(1,sides,1, endpoint=True)
+        roll = random.randint(1, sides)
+        ##print(roll)
+        if not reroll:
+            ##total += roll[0]
+            total += roll
+        elif roll < sides:
+            ##total+=roll[0]
+            total += roll
+        else:
+            #print("re-rolling...")
+            total += sides - 1
+            total += dicethrow(1, reroll,  sides) # + correction already here??
+    return total + correction
+
+
+def dice_from_string(dicestring="1d6+0"):
+    """expecting a dicestring in the format:
+       {dice}d{sides}+{correction}
+       examples:
+       1d6+0 ... one 6 sided die without re-roll
+       2D6+0 ... two 6-sided dice with reroll
+       1d20+1 ... one 20-sided die, correction value +1
+       3D6-2 ... three 6-sided dice with reroll, sum has correction value of -2
+       where:
+       d........means dice without re-roll
+       D........means dice with re-roll (1D6 count as 5 + the reroll value)
+       {dice} ...means number of dice throws, 2d means 2 dice etc. the sum of all throws is returned. must be integer
+       {sides} ...means mumber of sides per die dice. d20 means 20-sided dice etc. must be integer
+       {correction}.......means correction value that is added (subtracted) to the sum of all throws. must be integer
+
+       returns [dice, recroll, sides, correction]
+       """
+    # checking if string is correct
+    dicestring = dicestring.strip() # remove leading and trailing blanks
+    if dicestring.lower().count("d") != 1:
+        raise ValueError("none or more than one d (or D) found in: "+dicestring)
+    dpos = dicestring.lower().find("d")
+    reroll = True if dicestring[dpos] == "D" else False
+    #try:
+    dice = int(dicestring[:dpos])
+    #except ValueError:
+    #return [None,None,None,None], "integer value before d is missing in: " + dicestring
+    rest = dicestring[dpos+1:]
+    seperator = "+" if "+" in rest else ("-" if "-" in rest else None)
+    if seperator is not None:
+        #try:
+        sides = int(rest[:rest.find(seperator)])
+        #except ValueError:
+        #    return [None,None,None,None], "integer value after d is missing in: " + dicestring
+        #try:
+        correction = int(rest[rest.find(seperator):])
+        #except ValueError:
+        #    return [None,None,None,None], "integer value afer + (or -) is missing in: " + dicestring
+    else:
+        #try:
+        sides = int(rest)
+        #except ValueError:
+        #    return [None, None, None, None], "integer value after d is missing in: " + dicestring
+        correction = 0
+    #print("dice {} sides {} correction {}".format(dice, sides, correction))
+    return [dice, reroll, sides, correction]
+
+
 def fight(a, b):
     """dummy function, does nothing yet"""
     text = []
@@ -2849,9 +2948,16 @@ def impact_bubbles(a, b):
     m.normalize_ip()
     # impact point
     impactpoint = pygame.math.Vector2(bx, by) - m * Viewer.gridsize[0] // 2
-    Flytext(tx=b.x, ty=b.y, color=a.fgcolor, text="\u2694", fontsize=64,
-            move=pygame.math.Vector2(0,-5), width_start = Viewer.gridsize[0],
-            width_end=Viewer.gridsize[0]*2) # crossed Swords
+    Flytext(
+        tx=b.x,
+        ty=b.y,
+        color=a.fgcolor,
+        text="\u2694",
+        fontsize=64,
+        move=pygame.math.Vector2(0, -5),
+        width_start=Viewer.gridsize[0],
+        width_end=Viewer.gridsize[0] * 2,
+    )  # crossed Swords
     for _ in range(15):
         po = pygame.math.Vector2(impactpoint.x, impactpoint.y)
         mo = pygame.math.Vector2(m.x, m.y)
