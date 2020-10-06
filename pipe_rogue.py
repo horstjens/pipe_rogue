@@ -1141,7 +1141,8 @@ class Effect:
 class Fire(Effect):
 
     pictures = []
-    char = "\U0001F525" #"*"
+    char = "\U0001F525" #Flames "*"
+    #char = "\u2668" # hot springs
     wobble = (0, 0)
     # text = "Fire"
     fgcolor = (255, 0, 0)  # for panelinfo
@@ -1159,21 +1160,21 @@ class Fire(Effect):
 class Water(Effect):
 
     pictures = []
-    char = "\u2248"  # double wave instead of "~"
+    char = "\U0001F30A" # "#"\u2248"  # double wave instead of "~"
     fgcolor = (0, 0, 255)
     anim_cycle = 4
     damage = 3
 
     @classmethod
     def create_pictures(cls):
-        colorvalues = list(range(128, 256, 16))
-        colorvalues.extend(list(range(255, 127, -16)))
+        colorvalues = list(range(64, 256, 32))
+        colorvalues.extend(list(range(255, 63, -32)))
         for c in colorvalues:
             pic = make_text(Water.char, (0, 0, c))
-            if c % 2 == 0:  # the first half values (ascending)
-                Water.pictures.append(pic)
-            else:  # the second half (descending)            x     y
-                Water.pictures.append(pygame.transform.flip(pic, False, True))
+            #if c % 2 == 0:  # the first half values (ascending)
+            Water.pictures.append(pic)
+            #else:  # the second half (descending)            x     y
+            #    Water.pictures.append(pygame.transform.flip(pic, False, True))
 
 
 class Flash(Effect):
@@ -1530,7 +1531,7 @@ class Item:
 class Coin(Item):
 
     pictures = []
-    char = "$"
+    char = "\U0001F4B0" # bag of money "#  "$"
     fgcolor = (255, 255, 0)  # yellow
 
     @classmethod
@@ -1572,15 +1573,14 @@ class Key(Item):
 
 class Trap(Item):
     pictures = []
-    fgcolor = (1, 1, 1)
-    char = "\u2620"  # skull and bones
+    fgcolor = (128, 128, 128)
+    char = "\U0001F4A3" # bomb # 2620"  # skull and bones
 
     @classmethod
     def create_pictures(cls):
-        symbol = make_text(
-            cls.char, (255, 255, 0), style=pygame.freetype.STYLE_STRONG
-        )  # yellow (invisible?)
-        cls.pictures.append(symbol)
+        cls.pictures.append(make_text(
+            cls.char, cls.fgcolor, style=pygame.freetype.STYLE_STRONG
+        ))
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1616,7 +1616,7 @@ class Trap(Item):
         Flytext(
             pos=pygame.math.Vector2(px, py),
             move=pygame.math.Vector2(0, -1),
-            text=self.char,
+            text="\u2620",
             color=(255, 255, 255),
             bgcolor=(2, 2, 2),
             fontsize=100,
@@ -1711,7 +1711,7 @@ class Snake(Monster):
 
     pictures = []
     fgcolor = (23, 255, 0)  # light green
-    char = "\u046E"
+    char = "\U0001F40D" # snake "#"\u046E"
 
 
 class Dragon(Monster):
@@ -1766,7 +1766,7 @@ class SkyDragon(Monster):
 
     pictures = []
     fgcolor = (0, 0, 200)  # cyan
-    char = "S"
+    char = "\U0001F479" # japanese ogre "#"W" #char = "S"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1814,7 +1814,7 @@ class Waterguy(Monster):
 
     pictures = []
     fgcolor = (0, 0, 255)  # blue
-    char = "W"
+    char = "\U0001F419" # octopus "#"W"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1937,6 +1937,7 @@ class Viewer:
         # Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
         #fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
         fontfile = os.path.join("data", "fonts", "Symbola605.ttf")
+        #fontfile = os.path.join("data", "fonts", "NotoEmoji-Regular.ttf")
         Viewer.monofontfilename = os.path.join("data", "fonts", "FreeMonoBold.otf")
         Viewer.font = pygame.freetype.Font(fontfile)
         # Viewer.monofont = pygame.freetype.Font(monofontfile)
