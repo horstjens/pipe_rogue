@@ -809,7 +809,7 @@ class Game:
         target = Game.dungeon[monster.z][monster.y + dy][monster.x + dx]
         legal = True  # we assume it is possible to move there
         text = []
-        #if isinstance(target, Wall):  # same as target.__class__.__name__
+        # if isinstance(target, Wall):  # same as target.__class__.__name__
         #    legal = False
         if not isinstance(target, Door):
             if target.block_movement:
@@ -1141,8 +1141,8 @@ class Effect:
 class Fire(Effect):
 
     pictures = []
-    char = "\U0001F525" #Flames "*"
-    #char = "\u2668" # hot springs
+    char = "\U0001F525"  # Flames "*"
+    # char = "\u2668" # hot springs
     wobble = (0, 0)
     # text = "Fire"
     fgcolor = (255, 0, 0)  # for panelinfo
@@ -1160,7 +1160,7 @@ class Fire(Effect):
 class Water(Effect):
 
     pictures = []
-    char = "\U0001F30A" # "#"\u2248"  # double wave instead of "~"
+    char = "\U0001F30A"  # "#"\u2248"  # double wave instead of "~"
     fgcolor = (0, 0, 255)
     anim_cycle = 4
     damage = 3
@@ -1171,9 +1171,9 @@ class Water(Effect):
         colorvalues.extend(list(range(255, 63, -32)))
         for c in colorvalues:
             pic = make_text(Water.char, (0, 0, c))
-            #if c % 2 == 0:  # the first half values (ascending)
+            # if c % 2 == 0:  # the first half values (ascending)
             Water.pictures.append(pic)
-            #else:  # the second half (descending)            x     y
+            # else:  # the second half (descending)            x     y
             #    Water.pictures.append(pygame.transform.flip(pic, False, True))
 
 
@@ -1402,7 +1402,7 @@ class Glass(Structure):
 
     # USE font instead of freetype so that doors get not expanded (ugly)
     fgcolor = (200, 255, 250)  # cyan-white
-    nesw_tile = "g"  # glass neighbor tile
+    nesw_tile = "#"  # wall neighbor tile
     block_sight = False
     block_movement = True
     block_shooting = True  # set false for grille door etc.
@@ -1411,29 +1411,43 @@ class Glass(Structure):
     def create_pictures(cls):
         cls.exploredpicture_v = make_text("|", Viewer.explored_fgcolor)
         cls.exploredpicture_h = make_text("-", Viewer.explored_fgcolor)
+        cls.exploredpicture_cross = make_text("+", Viewer.explored_fgcolor)
         cls.fovpicture_v = make_text("|", cls.fgcolor)
         cls.fovpicture_h = make_text("-", cls.fgcolor)
+        cls.fovpicture_cross = make_text("+", cls.fgcolor)
 
     def __init__(self, nesw):
         super().__init__(nesw)
-        if nesw[0] and nesw[2]:  # glass north and south
+        # calculate orintation of glass wall depending on north-east-south-west wall neighbors
+        if nesw[0] and nesw[2]:  # wall north and south
             self.char = "|"
         elif nesw[1] and nesw[3]:  # wall east and west
             self.char = "-"
+        elif nesw[0] or nesw[2]:   # wall north or south
+            self.char = "|"
+        elif nesw[1] or nesw[3]:  # wall east or west
+            self.char = "-"
+        else:
+            self.char = "+"  # strange neighbors
         # self.closed = True
 
     def exploredpicture(self):
 
         if self.char == "|":
             return self.exploredpicture_v
-        if self.char == "-":
+        elif self.char == "-":
             return self.exploredpicture_h
+        else: #if self.char == "+":
+            return self.exploredpicture_cross
 
     def fovpicture(self):
         if self.char == "|":
             return self.fovpicture_v
-        if self.char == "-":
+        elif self.char == "-":
             return self.fovpicture_h
+        else:
+            #if self.char == "+":
+            return self.fovpicture_cross
 
 
 class StairDown(Structure):
@@ -1531,7 +1545,7 @@ class Item:
 class Coin(Item):
 
     pictures = []
-    char = "\U0001F4B0" # bag of money "#  "$"
+    char = "\U0001F4B0"  # bag of money "#  "$"
     fgcolor = (255, 255, 0)  # yellow
 
     @classmethod
@@ -1566,21 +1580,21 @@ class Key(Item):
 
     @classmethod
     def create_pictures(cls):
-        cls.pictures.append(make_text(
-            cls.char, (200, 200, 0), style=pygame.freetype.STYLE_STRONG
-        ))
+        cls.pictures.append(
+            make_text(cls.char, (200, 200, 0), style=pygame.freetype.STYLE_STRONG)
+        )
 
 
 class Trap(Item):
     pictures = []
     fgcolor = (128, 128, 128)
-    char = "\U0001F4A3" # bomb # 2620"  # skull and bones
+    char = "\U0001F4A3"  # bomb # 2620"  # skull and bones
 
     @classmethod
     def create_pictures(cls):
-        cls.pictures.append(make_text(
-            cls.char, cls.fgcolor, style=pygame.freetype.STYLE_STRONG
-        ))
+        cls.pictures.append(
+            make_text(cls.char, cls.fgcolor, style=pygame.freetype.STYLE_STRONG)
+        )
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1711,7 +1725,7 @@ class Snake(Monster):
 
     pictures = []
     fgcolor = (23, 255, 0)  # light green
-    char = "\U0001F40D" # snake "#"\u046E"
+    char = "\U0001F40D"  # snake "#"\u046E"
 
 
 class Dragon(Monster):
@@ -1766,7 +1780,7 @@ class SkyDragon(Monster):
 
     pictures = []
     fgcolor = (0, 0, 200)  # cyan
-    char = "\U0001F479" # japanese ogre "#"W" #char = "S"
+    char = "\U0001F479"  # japanese ogre "#"W" #char = "S"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1814,7 +1828,7 @@ class Waterguy(Monster):
 
     pictures = []
     fgcolor = (0, 0, 255)  # blue
-    char = "\U0001F419" # octopus "#"W"
+    char = "\U0001F419"  # octopus "#"W"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1935,9 +1949,9 @@ class Viewer:
         # ---- pygame init
         pygame.init()
         # Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
-        #fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
+        # fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
         fontfile = os.path.join("data", "fonts", "Symbola605.ttf")
-        #fontfile = os.path.join("data", "fonts", "NotoEmoji-Regular.ttf")
+        # fontfile = os.path.join("data", "fonts", "NotoEmoji-Regular.ttf")
         Viewer.monofontfilename = os.path.join("data", "fonts", "FreeMonoBold.otf")
         Viewer.font = pygame.freetype.Font(fontfile)
         # Viewer.monofont = pygame.freetype.Font(monofontfile)
@@ -2265,6 +2279,7 @@ class Viewer:
         Viewer.bottomrighttile = [-1, -1]
         for ty, line in enumerate(dungeon):
             for tx, tile in enumerate(line):
+                # -------------- process each tile ----------------------
                 x, y = Viewer.tile_to_pixel((tx, ty))
                 if (
                     y < 0
@@ -2274,7 +2289,7 @@ class Viewer:
                     - Viewer.hudheight
                     - Viewer.gridsize[1]
                 ):
-                    break  # continue with next ty
+                    break  # tile does not exist / is outside visible area -> continue with next ty
                 if x < 0 or x > Viewer.width - Viewer.panelwidth - Viewer.gridsize[0]:
                     continue  # next tx
                 # update visible tiles on screen information -> shrink rect of visible tiles
@@ -2282,19 +2297,18 @@ class Viewer:
                 Viewer.bottomrighttile[0] = max(tx, Viewer.bottomrighttile[0])
                 Viewer.toplefttile[1] = min(ty, Viewer.toplefttile[1])
                 Viewer.bottomrighttile[1] = max(ty, Viewer.bottomrighttile[1])
-
                 # correction for center (necessary because drawing/blitting from topleft center)
                 x -= Viewer.gridsize[0] // 2
                 y -= Viewer.gridsize[1] // 2
                 # paint on tile on the pygame sreen surface
-                if not tile.fov:  # ---- outside fov ----- not in players field of view
-                    if tile.explored:  # known from previous encounter
+                if not tile.fov:
+                    # --------------- outside fov ----- not in players field of view
+                    if tile.explored:  # known from previous encounter. paint only structure
                         pygame.draw.rect(
                             self.screen,
                             exploredbg,
                             (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
-                        )  # fill
-                        # char = make_text(tile.char, font_color=exploredfg,  font_size=48, max_gridsize=Viewer.gridsize)
+                        )  # fill with exploredbackgroundcolor
                         pic = tile.exploredpicture()
                         if pic is not None:
                             self.screen.blit(pic, (x, y))  # blit from topleft corner
@@ -2304,12 +2318,16 @@ class Viewer:
                             (0, 0, 0),
                             (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                         )  # fill
-                else:  # ---- inside fov ----- , --> tile.gbcolor for background
+                else:
+                    # ---------------------------- inside fov ----- , --> tile.bgcolor for background
+                    # --------- from ground to sky -> top is always drawn over (and partly blocking) bottom
+                    #  ----- background color ----
                     pygame.draw.rect(
                         self.screen,
                         tile.bgcolor,
                         (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                     )
+
                     # effect is blocking items, but not monsters
                     monstercounter = 0
                     monsters = [
@@ -2372,7 +2390,7 @@ class Viewer:
                             (0, 0),
                             (e.px, e.py, Viewer.gridsize[0], Viewer.gridsize[1]),
                         )
-                # paint grid rect
+                # -------------- paint grid rect ---------------
                 pygame.draw.rect(
                     self.screen,
                     (128, 128, 128),
