@@ -1229,12 +1229,20 @@ class Structure:
     block_movement = False
     block_shooting = False
     nesw_tile = None  # if this is a char, fill self.nesw with True for north, east, south, west neigbors
+    exploredpic = None # will be overwritten by create_pictures
+    fovpic = None      # will be overwritten by create_pictures
 
     @classmethod
-    def create_pictures(
-        cls,
-    ):  # will be called once from class Viewer.load_images to create fovpicture and exploredpicture
-        pass
+    def create_pictures(cls):
+        cls.exploredpic = make_text(cls.char, Viewer.explored_fgcolor)
+        cls.fovpic = make_text(cls.char, cls.fgcolor)
+
+    def exploredpicture(self):
+        return self.exploredpic
+
+    def fovpicture(self):
+        return self.fovpic
+
 
     def __init__(self, nesw=None):
         self.explored = False  # stay visible on map, but with fog of war
@@ -1242,11 +1250,6 @@ class Structure:
         self.char = None  # for textual representation btw for make_text(char)
         self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
 
-    def exploredpicture(self):
-        return None
-
-    def fovpicture(self):
-        return None
 
 
 class Floor(Structure):
@@ -1260,16 +1263,6 @@ class Terminal(Structure):
     block_shooting = False
 
 
-    @classmethod
-    def create_pictures(cls):
-        cls.exploredpic = make_text(cls.char, Viewer.explored_fgcolor)
-        cls.fovpic = make_text(cls.char, cls.fgcolor)
-
-    def exploredpicture(self):
-        return self.exploredpic
-
-    def fovpicture(self):
-        return self.fovpic
 
     def effect_download(self):
         Game.player.downloads += 1
@@ -1327,39 +1320,6 @@ class Wall(Structure):
         (False, True, False, False): "\u255E",  # terminate from east
         (True, False, False, False): "\u2568",  # terminate from north
     }
-
-    @classmethod
-    def create_pictures2(cls):
-        for k, v in cls.lookup.items():
-            fontsize = 64
-            # Viewer.font.origin = True
-            tmp = pygame.Surface(Viewer.gridsize)
-            tmp.set_colorkey((0, 0, 0))
-            tmp.convert_alpha()
-            rect = Viewer.font.get_rect(
-                v, size=fontsize
-            )  # --> origin x,y, width of recht, height of rect
-            rx, ry, rwidth, rheight = rect
-            bx = Viewer.gridsize[0] // 2 - (rx + rwidth // 2)
-            by = Viewer.gridsize[1] // 2 - (ry - rheight // 2)
-            print(rect, rect.center, bx, by)
-
-            # print(v, rect)
-            ##  render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
-            # (rect[0],rect[1])
-            rect2 = Viewer.font.render_to(
-                tmp, (bx, by), v, fgcolor=cls.fgcolor, size=fontsize
-            )
-            # pic, rect  = Viewer.font.render(v, fgcolor=cls.fgcolor, size=24)
-            cls.fovpictures[k] = tmp
-            tmp2 = pygame.Surface(Viewer.gridsize)
-            tmp2.set_colorkey((0, 0, 0))
-            tmp2.convert_alpha()
-            rect2 = Viewer.font.render_to(
-                tmp2, (bx, by), v, fgcolor=Viewer.explored_fgcolor, size=fontsize
-            )
-            cls.exploredpictures[k] = tmp
-        # input("...Enter..")
 
     @classmethod
     def create_pictures(cls):
@@ -1511,16 +1471,7 @@ class StairDown(Structure):
     fgcolor = (150, 50, 90)  # dark pink
     char = "\u21A7"  # downwards arrow from bar
 
-    @classmethod
-    def create_pictures(cls):
-        StairDown.exploredpic = make_text("\u21A7", Viewer.explored_fgcolor)
-        StairDown.fovpic = make_text("\u21A7", cls.fgcolor)
 
-    def exploredpicture(self):
-        return StairDown.exploredpic
-
-    def fovpicture(self):
-        return StairDown.fovpic
 
 
 class StairUp(Structure):
@@ -1528,16 +1479,6 @@ class StairUp(Structure):
     fgcolor = (60, 200, 200)  # cyan
     char = "\u21A5"  # upwards arrow from bar
 
-    @classmethod
-    def create_pictures(cls):
-        StairUp.exploredpic = make_text("\u21A5", Viewer.explored_fgcolor)
-        StairUp.fovpic = make_text("\u21A5", cls.fgcolor)
-
-    def exploredpicture(self):
-        return StairUp.exploredpic
-
-    def fovpicture(self):
-        return StairUp.fovpic
 
 
 class Item:
@@ -1551,7 +1492,7 @@ class Item:
 
     @classmethod
     def create_pictures(cls):  # make the char into a picture
-        cls.pictures.append(make_text(cls.char, cls.fgcolor, font=Viewer.font2))
+        cls.pictures.append(make_text(cls.char, cls.fgcolor, font=Viewer.font2 ))
 
     def __init__(self, x, y, z):
         self.number = Game.itemnumber
@@ -1611,14 +1552,8 @@ class Coin(Item):
 class Key(Item):
 
     pictures = []
-    fgcolor = (255, 255, 255)
+    fgcolor = (255, 255, 0)
     char = "\U0001F511"  # key #"k"
-
-    @classmethod
-    def create_pictures(cls):
-        cls.pictures.append(
-            make_text(cls.char, (200, 200, 0), style=pygame.freetype.STYLE_STRONG)
-        )
 
 
 class Trap(Item):
@@ -2629,7 +2564,7 @@ class Viewer:
         # pygame.mouse.set_visible(False)
         oldleft, oldmiddle, oldright = False, False, False
 
-        Bubble(pos=pygame.math.Vector2(200, 200), age=-1)
+        #Bubble(pos=pygame.math.Vector2(200, 200), age=-1)
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
             move=pygame.math.Vector2(0, -15),
@@ -3287,7 +3222,7 @@ level1 = """
 ######################################
 #@#...#.k.d....#............$.....M..#
 #>TTT#....#........#...t....#...#....#
-##.#.#ff..#gg#.#...#.......###.......#
+##.#t#ff..#gg#.#...#.......###.......#
 #.$$.M....gß.#.#...#...ff..#...$.....#
 ######################################"""
 
