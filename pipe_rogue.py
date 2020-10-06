@@ -32,6 +32,9 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: make font in download_effect smaller
+# TODO: make disk icon in panel smaller
+# TODO: progress bar
 # TODO: learn LayerdDirty Spritegroups, update all sprites to DirtySprites -> make dirty and visible work correctly
 # TODO: game menu, death of player -> newstart
 # TODO: shooting through walls is possible?!
@@ -99,7 +102,6 @@ class VectorSprite(pygame.sprite.Sprite):
         # self.rect.center = (-300,-300) # avoid blinking image in topleft corner
         if self.angle != 0:
             self.set_angle(self.angle)
-
 
     def _overwrite_parameters(self):
         """change parameters before create_image is called"""
@@ -283,7 +285,6 @@ class VectorSprite(pygame.sprite.Sprite):
                 self.pos.y = 0
 
 
-
 class Flytext(VectorSprite):
     def __init__(
         self,
@@ -374,7 +375,7 @@ class Flytext(VectorSprite):
             self.recalc_each_frame = True
         else:
             self.rotate_diff_per_second = 0
-        #self.visible = False
+        # self.visible = False
         VectorSprite.__init__(
             self,
             color=color,
@@ -384,7 +385,7 @@ class Flytext(VectorSprite):
             age=age,
         )
         self._layer = 7  # order of sprite layers (before / behind other sprites)
-        #print("start visible", self.visible)
+        # print("start visible", self.visible)
 
         # acceleration_factor  # if < 1, Text moves slower. if > 1, text moves faster.
 
@@ -461,7 +462,6 @@ class Flytext(VectorSprite):
         self.move *= self.acceleration_factor
         if self.recalc_each_frame:
             self.create_image()
-
 
 
 class BlueTile(VectorSprite):
@@ -980,6 +980,11 @@ class Game:
                     if t.calculate_detect():
                         t.detected = True
                         t.effect_detected()
+        # ------- checking of standing south of a terminal -----
+        if hero.y > 0:
+            north = Game.dungeon[hero.z][hero.y -1][hero.x]
+            if isinstance(north, Terminal):
+                text.append("press e to activate the terminal")
         # ------------- iterating over (damage) effects at player position ------
         # for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
         #    text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
@@ -1005,7 +1010,9 @@ class Game:
                 hero.hp -= damage
                 i.detected = True
                 text.append(f"You trigger a trap and loose {damage} hp.")
-                i.effect_trigger(damage)  # skull and bones effect from trap, -hp flysprite
+                i.effect_trigger(
+                    damage
+                )  # skull and bones effect from trap, -hp flysprite
                 # delete trap?
                 if i.calculate_destroy():
                     text.append("the trap is destroyed")
@@ -1173,7 +1180,7 @@ class Fire(Effect):
 class Water(Effect):
 
     pictures = []
-    wobble = (1,1)
+    wobble = (1, 1)
     char = "\U0001F30A"  # "#"\u2248"  # double wave instead of "~"
     fgcolor = (0, 0, 255)
     anim_cycle = 4
@@ -1243,9 +1250,44 @@ class Structure:
 
 
 class Floor(Structure):
-    def __init__(self):
-        super().__init__()
-        self.char = " "
+    char = " "
+
+class Terminal(Structure):
+    char = "\U0001F4BB"
+    fgcolor = (100, 100, 100) # grey
+    block_sight = False
+    block_movement = True
+    block_shooting = False
+
+
+    @classmethod
+    def create_pictures(cls):
+        cls.exploredpic = make_text(cls.char, Viewer.explored_fgcolor)
+        cls.fovpic = make_text(cls.char, cls.fgcolor)
+
+    def exploredpicture(self):
+        return self.exploredpic
+
+    def fovpicture(self):
+        return self.fovpic
+
+    def effect_download(self):
+        Game.player.downloads += 1
+        for t in range(0, -6, -1):
+            zerostring = list("0101010101010101010101010101010110")
+            random.shuffle(zerostring)
+            Flytext(tx=Game.player.x,
+                    ty=Game.player.y-1,
+                    text="".join(zerostring),
+                    color=(0,200,0),
+                    bgcolor=(1,1,1),
+                    age=t * 0.3,
+                    max_age = 5,
+                    alpha_start = 255,
+                    alpha_end = 64,
+                    fontsize=64,
+                    move=pygame.math.Vector2(0,-100),
+                    )
 
 
 class Wall(Structure):
@@ -1584,7 +1626,6 @@ class Trap(Item):
     fgcolor = (128, 128, 128)
     char = "\U0001F4A3"  # bomb # 2620"  # skull and bones
 
-
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.damage = (
@@ -1614,7 +1655,7 @@ class Trap(Item):
         # return       #random.randint(1, 6)
 
     def effect_detected(self):
-        Flytext(tx=self.x, ty = self.y, text="trap detected")
+        Flytext(tx=self.x, ty=self.y, text="trap detected")
 
     def effect_trigger(self, damage):
         px, py = Viewer.tile_to_pixel((self.x, self.y))
@@ -1663,11 +1704,11 @@ class Monster:
 
     pictures = []
     fgcolor = (255, 0, 0)  # red
-    char = "\U0001F620" #angry blob  "\U0001F608"  # angry emoticon
+    char = "\U0001F620"  # angry blob  "\U0001F608"  # angry emoticon
 
     @classmethod
     def create_pictures(cls):
-        pic = make_text(cls.char, cls.fgcolor, font=Viewer.font2 )
+        pic = make_text(cls.char, cls.fgcolor, font=Viewer.font2)
         cls.pictures.append(pic)
 
     def __init__(self, x, y, z):
@@ -1875,6 +1916,7 @@ class Player(Monster):
         super().__init__(x, y, z)
         self.hp = 50
         self.friendly = True
+        self.downloads = 0
         # self.backpack = [] # container for transported items
 
 
@@ -2108,7 +2150,7 @@ class Viewer:
         """painting on the surface and create sprites"""
         Viewer.allgroup = pygame.sprite.LayeredUpdates()  # for drawing with layers
         Viewer.visiblegroup = pygame.sprite.LayeredUpdates()
-        #Viewer.allgroup = pygame.sprite.LayeredDirty()  # for drawing with layers
+        # Viewer.allgroup = pygame.sprite.LayeredDirty()  # for drawing with layers
         Viewer.playergroup = (
             pygame.sprite.OrderedUpdates()
         )  # a group maintaining order in list
@@ -2150,7 +2192,6 @@ class Viewer:
             color=(0, 0, 255),
             font_size=32,
             origin="topleft",
-
         )
         z = Game.player.z
         tiles_x = len(Game.dungeon[z][0])  # z y x
@@ -2201,6 +2242,12 @@ class Viewer:
         write(
             self.panelscreen, "{:>3}".format(food), 130, 200, font_size=32
         )  # gold text
+        # ---- downloads ----
+        self.panelscreen.blit(make_text("\U0001F4BE"), (-5, 230))
+        write(
+            self.panelscreen, "{:>3}".format(Game.player.downloads),
+            25, 230, font_size=32
+        )
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -2329,11 +2376,23 @@ class Viewer:
                     items = [
                         i
                         for i in Game.items.values()
-                        if i.z == z and i.y == ty and i.x == tx and not i.backpack and not isinstance(i, Trap)
+                        if i.z == z
+                        and i.y == ty
+                        and i.x == tx
+                        and not i.backpack
+                        and not isinstance(i, Trap)
                     ]
                     # ---------- traps (detected) ---------------
-                    traps = [i for i in Game.items.values() if i.z == z and i.y == ty and i.x == tx and not i.backpack
-                             and isinstance(i, Trap) and i.detected]
+                    traps = [
+                        i
+                        for i in Game.items.values()
+                        if i.z == z
+                        and i.y == ty
+                        and i.x == tx
+                        and not i.backpack
+                        and isinstance(i, Trap)
+                        and i.detected
+                    ]
                     items.extend(traps)
                     # ---- paint items and detected traps ---
                     itemcounter = len(items)
@@ -2570,14 +2629,14 @@ class Viewer:
         # pygame.mouse.set_visible(False)
         oldleft, oldmiddle, oldright = False, False, False
 
-        Bubble(pos=pygame.math.Vector2(200,200), age=-1)
+        Bubble(pos=pygame.math.Vector2(200, 200), age=-1)
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
             move=pygame.math.Vector2(0, -15),
             text="Enjoy pipe_rogue!",
             fontsize=64,
             max_age=2.0,
-            age = 0,
+            age=0,
             bgcolor=None,
             alpha_start=255,
             alpha_end=0,
@@ -2665,8 +2724,12 @@ class Viewer:
                             self.loglines.extend(self.g.close_door())
                             repaint = True
                         if event.key == pygame.K_e and len(self.flytextgroup) == 0:
-                            # eat foot
-                            self.loglines.extend(self.g.eat())
+                            # if south of terminal -> activate download,
+                            # otherwise -> eat food
+                            if hero.y > 0 and isinstance(Game.dungeon[hero.z][hero.y-1][hero.x], Terminal):
+                                Game.dungeon[hero.z][hero.y-1][hero.x].effect_download()
+                            else:
+                                self.loglines.extend(self.g.eat())
                             repaint = True
                         # ---------- on german keyboard, K_GREATER key is the same as SHIFT and K_LESS
                         if (
@@ -2788,25 +2851,27 @@ class Viewer:
             # beam.hitpoints = 0 # kill later
             # ----------- draw  -----------------
             self.allgroup.draw(self.screen)
-            #self.visiblegroup.empty()
+            # self.visiblegroup.empty()
             self.visiblegroup = self.allgroup.copy()
             for s in self.visiblegroup:
                 if not s.visible:
                     s.rect.centery = -500
-            #for s in self.allgroup:
+            # for s in self.allgroup:
             #    if s.visible:
             #        self.visiblegroup.add(s)
-            #visiblegroup = [s for s in self.allgroup if s.visible]
+            # visiblegroup = [s for s in self.allgroup if s.visible]
             self.visiblegroup.draw(self.screen)
             # if cursormode:
             # self.effectgroup.draw(self.screen)
 
             self.cursorgroup.draw(self.screen)
             # write text below sprites
-            fps_text = "pipe_roge ({}x{}) FPS: {:8.3}".format(Viewer.width, Viewer.height, self.clock.get_fps())
-            #pygame.display.set_caption("pipe_rogue version:".format(version))
+            fps_text = "pipe_roge ({}x{}) FPS: {:8.3}".format(
+                Viewer.width, Viewer.height, self.clock.get_fps()
+            )
+            # pygame.display.set_caption("pipe_rogue version:".format(version))
             pygame.display.set_caption(fps_text)
-            #write(
+            # write(
             #    self.screen,
             #    text=fps_text,
             #    origin="bottomright",
@@ -2814,7 +2879,7 @@ class Viewer:
             #    y=Viewer.height - 5,
             #    font_size=18,
             #    color=(200, 40, 40),
-            #)
+            # )
             # ----- hud ----
             # self.hud()
             # -------- next frame -------------
@@ -3160,7 +3225,7 @@ def write(
     origin="topleft",
     mono=True,
     rotation=0,
-    style=pygame.freetype.STYLE_STRONG
+    style=pygame.freetype.STYLE_STRONG,
 ):
     """blit text on a given pygame surface (given as 'background')
     the origin is the alignment of the text surface
@@ -3216,13 +3281,14 @@ legend = {
     "f": Food,
     "ß": Snake,
     "T": Trap,
+    "t": Terminal,
 }
 level1 = """
 ######################################
 #@#...#.k.d....#............$.....M..#
-#>TTT#....#........#..###...#...#....#
-##.#.#ff..#gg#.#...####....###.......#
-#.$$.M....gß.#.#....#...ff..#...$....#
+#>TTT#....#........#...t....#...#....#
+##.#.#ff..#gg#.#...#.......###.......#
+#.$$.M....gß.#.#...#...ff..#...$.....#
 ######################################"""
 
 # insert in level2: W for Waterguy, S for Skydragon
