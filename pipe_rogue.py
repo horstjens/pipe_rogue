@@ -1190,8 +1190,8 @@ class Flash(Effect):
         """create a spiderweb of withe-blue lines, cracling from the center of tile to it's edge"""
         pic1 = make_text("\u26A1", (0, 0, 255))
         pic2 = make_text("\u26A1", (220, 220, 255))
-        pic3 = pygame.transform.flip(pic1, False, True)
-        pic4 = pygame.transform.flip(pic2, False, True)
+        pic3 = pygame.transform.flip(pic1, True, False)
+        pic4 = pygame.transform.flip(pic2, True, False)
         cls.pictures = [pic1, pic2, pic3, pic4]
         # return
 
@@ -1423,7 +1423,7 @@ class Glass(Structure):
             self.char = "|"
         elif nesw[1] and nesw[3]:  # wall east and west
             self.char = "-"
-        elif nesw[0] or nesw[2]:   # wall north or south
+        elif nesw[0] or nesw[2]:  # wall north or south
             self.char = "|"
         elif nesw[1] or nesw[3]:  # wall east or west
             self.char = "-"
@@ -1437,7 +1437,7 @@ class Glass(Structure):
             return self.exploredpicture_v
         elif self.char == "-":
             return self.exploredpicture_h
-        else: #if self.char == "+":
+        else:  # if self.char == "+":
             return self.exploredpicture_cross
 
     def fovpicture(self):
@@ -1446,7 +1446,7 @@ class Glass(Structure):
         elif self.char == "-":
             return self.fovpicture_h
         else:
-            #if self.char == "+":
+            # if self.char == "+":
             return self.fovpicture_cross
 
 
@@ -2303,7 +2303,9 @@ class Viewer:
                 # paint on tile on the pygame sreen surface
                 if not tile.fov:
                     # --------------- outside fov ----- not in players field of view
-                    if tile.explored:  # known from previous encounter. paint only structure
+                    if (
+                        tile.explored
+                    ):  # known from previous encounter. paint only structure
                         pygame.draw.rect(
                             self.screen,
                             exploredbg,
@@ -2327,24 +2329,36 @@ class Viewer:
                         tile.bgcolor,
                         (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                     )
-
-                    # effect is blocking items, but not monsters
-                    monstercounter = 0
+                    # ------- structure --------
+                    pic = tile.fovpicture()
+                    if pic is not None:
+                        self.screen.blit(
+                            pic, (x, y)
+                        )  # blit from topleft corner
+                    # ------------- items ----------
+                    items = [
+                        i
+                        for i in Game.items.values()
+                        if i.z == z and i.y == ty and i.x == tx and not i.backpack
+                    ]
+                    itemcounter = len(items)
+                    if itemcounter > 1:
+                        # blit 'infinite' symbol if more than one items are at one tile
+                        char = make_text("\u221E", (255, 200, 50))  # infinity sign
+                        self.screen.blit(char, (x, y))  # blit from topleft corner
+                    elif itemcounter == 1:
+                        self.screen.blit(items[0].fovpicture(), (x, y))
+                    # --------  monster -------------
                     monsters = [
                         m
                         for m in Game.zoo.values()
                         if m.z == z and m.y == ty and m.x == tx and m.hp > 0
                     ]
-                    monstercounter = len(monsters)
+                    #monstercounter = len(monsters)
                     for m in monsters:
-                        # char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, max_gridsize=Viewer.gridsize)
-                        # self.screen.blit(char, (x, y))  # blit from topleft corner
                         self.screen.blit(m.fovpicture(), (x, y))
-                        # break # no more than one monster per tile
-                    monstercounter = len(monsters)
-                    # always paint effect, if necessary paint effect OVER monster
-                    # calculate effect animation coordinates and fov ( effect will be painted in Viewer.run
 
+                    # ------------- effects --------------
                     for e in [
                         e
                         for e in Game.effects.values()
@@ -2352,51 +2366,98 @@ class Viewer:
                     ]:
                         e.fov = True
                         e.px, e.py = x, y
-                        # no break because multiple effects per tile are possible
-                        # blitting of effect will be done in Viewer.paint_animation because all effects have animations
-                    if monstercounter == 0:
-                        # monster is blocking items
-                        itemcounter = 0
-                        items = [
-                            i
-                            for i in Game.items.values()
-                            if i.z == z and i.y == ty and i.x == tx and not i.backpack
-                        ]
-                        itemcounter = len(items)
-                        if itemcounter > 1:
-                            # blit 'infinite' symbol if more than one items are at one tile
-                            char = make_text("\u221E", (255, 200, 50))  # infinity sign
-                            self.screen.blit(char, (x, y))  # blit from topleft corner
-                        elif itemcounter == 1:
-                            # self.screen.blit(char, (x, y))  # blit from topleft corner
-                            self.screen.blit(items[0].fovpicture(), (x, y))
-                        elif itemcounter == 0:
-                            # paint the structure pic
-                            pic = tile.fovpicture()
-                            if pic is not None:
-                                self.screen.blit(
-                                    pic, (x, y)
-                                )  # blit from topleft corner
 
-                    # save screenrect background for effect at this place
+                    # ----- seve effect srceenrect to background (otherwise effects have black background? )
+
                     for e in [
-                        e
-                        for e in Game.effects.values()
-                        if e.tx == tx and e.ty == ty and e.age >= 0
+                         e
+                         for e in Game.effects.values()
+                         if e.tx == tx and e.ty == ty and e.age >= 0
                     ]:
-                        # where to blit ( what to blit, (where on dest topleftxy), (rect-area of source to blit )
-                        e.background.blit(
-                            self.screen,
-                            (0, 0),
-                            (e.px, e.py, Viewer.gridsize[0], Viewer.gridsize[1]),
-                        )
-                # -------------- paint grid rect ---------------
-                pygame.draw.rect(
-                    self.screen,
-                    (128, 128, 128),
-                    (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
-                    1,
-                )
+                         # where to blit ( what to blit, (where on dest topleftxy), (rect-area of source to blit )
+                         e.background.blit(
+                             self.screen,
+                             (0, 0),
+                             (e.px, e.py, Viewer.gridsize[0], Viewer.gridsize[1]),
+                         )
+                    # ------------ grid --------------
+                    pygame.draw.rect(
+                        self.screen,
+                        (128, 128, 128),
+                        (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
+                        1,
+                    )
+
+                #     # ----------------------------------------------------------------------
+                #     # effect is blocking items, but not monsters
+                #     monstercounter = 0
+                #     monsters = [
+                #         m
+                #         for m in Game.zoo.values()
+                #         if m.z == z and m.y == ty and m.x == tx and m.hp > 0
+                #     ]
+                #     monstercounter = len(monsters)
+                #     for m in monsters:
+                #         # char = make_text(monster.char, font_color=monster.fgcolor, font_size=48, max_gridsize=Viewer.gridsize)
+                #         # self.screen.blit(char, (x, y))  # blit from topleft corner
+                #         self.screen.blit(m.fovpicture(), (x, y))
+                #         # break # no more than one monster per tile
+                #     monstercounter = len(monsters)
+                #     # always paint effect, if necessary paint effect OVER monster
+                #     # calculate effect animation coordinates and fov ( effect will be painted in Viewer.run
+                #
+                #     for e in [
+                #         e
+                #         for e in Game.effects.values()
+                #         if e.tx == tx and e.ty == ty and e.age >= 0
+                #     ]:
+                #         e.fov = True
+                #         e.px, e.py = x, y
+                #         # no break because multiple effects per tile are possible
+                #         # blitting of effect will be done in Viewer.paint_animation because all effects have animations
+                #     if monstercounter == 0:
+                #         # monster is blocking items
+                #         itemcounter = 0
+                #         items = [
+                #             i
+                #             for i in Game.items.values()
+                #             if i.z == z and i.y == ty and i.x == tx and not i.backpack
+                #         ]
+                #         itemcounter = len(items)
+                #         if itemcounter > 1:
+                #             # blit 'infinite' symbol if more than one items are at one tile
+                #             char = make_text("\u221E", (255, 200, 50))  # infinity sign
+                #             self.screen.blit(char, (x, y))  # blit from topleft corner
+                #         elif itemcounter == 1:
+                #             # self.screen.blit(char, (x, y))  # blit from topleft corner
+                #             self.screen.blit(items[0].fovpicture(), (x, y))
+                #         elif itemcounter == 0:
+                #             # paint the structure pic
+                #             pic = tile.fovpicture()
+                #             if pic is not None:
+                #                 self.screen.blit(
+                #                     pic, (x, y)
+                #                 )  # blit from topleft corner
+                #
+                #     # save screenrect background for effect at this place
+                #     for e in [
+                #         e
+                #         for e in Game.effects.values()
+                #         if e.tx == tx and e.ty == ty and e.age >= 0
+                #     ]:
+                #         # where to blit ( what to blit, (where on dest topleftxy), (rect-area of source to blit )
+                #         e.background.blit(
+                #             self.screen,
+                #             (0, 0),
+                #             (e.px, e.py, Viewer.gridsize[0], Viewer.gridsize[1]),
+                #         )
+                # # -------------- paint grid rect ---------------
+                # pygame.draw.rect(
+                #     self.screen,
+                #     (128, 128, 128),
+                #     (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
+                #     1,
+                # )
 
     def paint_animation(self, seconds):
         """update animated tiles (effects) between player turns
