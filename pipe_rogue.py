@@ -25,6 +25,7 @@ unicode tables:
 # https://dejavu-fonts.github.io/
 # defja vu sans: http://dejavu.sourceforge.net/samples/DejaVuSans.pdf
 # deja vu sans mono: http://dejavu.sourceforge.net/samples/DejaVuSansMono.pdf
+# free icons from google: https://material.io/resources/icons/?style=baseline
 
 # useful: 3stars: \u2042
 # pycharm colorpicker: alt+enter+c
@@ -32,8 +33,7 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
-# TODO: make font in download_effect smaller
-# TODO: make disk icon in panel smaller
+
 # TODO: progress bar
 # TODO: learn LayerdDirty Spritegroups, update all sprites to DirtySprites -> make dirty and visible work correctly
 # TODO: game menu, death of player -> newstart
@@ -43,7 +43,6 @@ unicode tables:
 # TODO: dungoen generator, dungeon Viewer / Editor (pysimplegui?)
 # TODO: include complex fight / strike system
 # TODO: diplay unicode symbols for attack/defense rolls
-# TODO: make correct docstring for make_text
 # TODO: light emiiting lamps, difference fov - light, turning lamps on and off, sight_distacne <> torchradius
 # TODO: big enjoy Flytext: gridcursorsprite is painted OVER flytext -> should be: first grid, than flytext on top!
 # TODO: minimalspeed für Arrow, soll trotzdem am target_tile verschwinden - max_distance
@@ -53,6 +52,9 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: make disk icon in panel smaller
+# done: make correct docstring for make_text
+# done: make font in download_effect smaller
 # done: negative age for flytext does not work
 # done: clean code in panel-update (why is fps showing there?)
 # done: make trap-detect -radius for player
@@ -298,7 +300,7 @@ class Flytext(VectorSprite):
         max_age=1,
         age=0,
         acceleration_factor=1.0,
-        fontsize=22,
+        fontsize=48,
         textrotation=0,
         style=pygame.freetype.STYLE_STRONG,
         alpha_start=255,
@@ -982,7 +984,7 @@ class Game:
                         t.effect_detected()
         # ------- checking of standing south of a terminal -----
         if hero.y > 0:
-            north = Game.dungeon[hero.z][hero.y -1][hero.x]
+            north = Game.dungeon[hero.z][hero.y - 1][hero.x]
             if isinstance(north, Terminal):
                 text.append("press e to activate the terminal")
         # ------------- iterating over (damage) effects at player position ------
@@ -1229,8 +1231,8 @@ class Structure:
     block_movement = False
     block_shooting = False
     nesw_tile = None  # if this is a char, fill self.nesw with True for north, east, south, west neigbors
-    exploredpic = None # will be overwritten by create_pictures
-    fovpic = None      # will be overwritten by create_pictures
+    exploredpic = None  # will be overwritten by create_pictures
+    fovpic = None  # will be overwritten by create_pictures
 
     @classmethod
     def create_pictures(cls):
@@ -1243,7 +1245,6 @@ class Structure:
     def fovpicture(self):
         return self.fovpic
 
-
     def __init__(self, nesw=None):
         self.explored = False  # stay visible on map, but with fog of war
         self.fov = False  # currently in field of view of player?
@@ -1251,36 +1252,35 @@ class Structure:
         self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
 
 
-
 class Floor(Structure):
     char = " "
 
+
 class Terminal(Structure):
     char = "\U0001F4BB"
-    fgcolor = (100, 100, 100) # grey
+    fgcolor = (100, 100, 100)  # grey
     block_sight = False
     block_movement = True
     block_shooting = False
 
-
-
     def effect_download(self):
         Game.player.downloads += 1
-        for t in range(0, -6, -1):
-            zerostring = list("0101010101010101010101010101010110")
+        zerostring = list("010101010101010101010")
+        for t in range(0, -25, -1):
             random.shuffle(zerostring)
-            Flytext(tx=Game.player.x,
-                    ty=Game.player.y-1,
-                    text="".join(zerostring),
-                    color=(0,200,0),
-                    bgcolor=(1,1,1),
-                    age=t * 0.3,
-                    max_age = 5,
-                    alpha_start = 255,
-                    alpha_end = 64,
-                    fontsize=64,
-                    move=pygame.math.Vector2(0,-100),
-                    )
+            Flytext(
+                tx=Game.player.x,
+                ty=Game.player.y - 1,
+                text="".join(zerostring),
+                color=(0, 200, 0),
+                bgcolor=(1, 1, 1),
+                age=t * 0.3,
+                max_age=5,
+                alpha_start=255,
+                alpha_end=64,
+                fontsize=32,
+                move=pygame.math.Vector2(0, -75),
+            )
 
 
 class Wall(Structure):
@@ -1325,12 +1325,12 @@ class Wall(Structure):
     def create_pictures(cls):
         Wall.exploredpictures = {
             k: make_text(
-                v, Viewer.explored_fgcolor, mono=True, size=Viewer.wallfontsize
+                v, Viewer.explored_fgcolor, mono=True, fontsize=Viewer.wallfontsize
             )
             for k, v in Wall.lookup.items()
         }
         Wall.fovpictures = {
-            k: make_text(v, cls.fgcolor, mono=True, size=Viewer.wallfontsize)
+            k: make_text(v, cls.fgcolor, mono=True, fontsize=Viewer.wallfontsize)
             for k, v in Wall.lookup.items()
         }
 
@@ -1472,13 +1472,10 @@ class StairDown(Structure):
     char = "\u21A7"  # downwards arrow from bar
 
 
-
-
 class StairUp(Structure):
 
     fgcolor = (60, 200, 200)  # cyan
     char = "\u21A5"  # upwards arrow from bar
-
 
 
 class Item:
@@ -1492,7 +1489,7 @@ class Item:
 
     @classmethod
     def create_pictures(cls):  # make the char into a picture
-        cls.pictures.append(make_text(cls.char, cls.fgcolor, font=Viewer.font2 ))
+        cls.pictures.append(make_text(cls.char, cls.fgcolor, font=Viewer.font2))
 
     def __init__(self, x, y, z):
         self.number = Game.itemnumber
@@ -1510,12 +1507,15 @@ class Item:
             number_of_bubbles = 5
         px, py = Viewer.tile_to_pixel((self.x, self.y))
         posvector = pygame.math.Vector2(px, py)
+        yspeed = random.randint(-20,-5)
+        yacc = 1.0 + random.random() * 0.15
         Flytext(
             pos=posvector,
-            move=pygame.math.Vector2(0, -20),
+            move=pygame.math.Vector2(0, yspeed),
+            acceleration_factor= yacc,
             text=ftext,
             color=self.fgcolor,
-            fontsize=25,
+            fontsize=32,
         )
         for _ in range(number_of_bubbles):
             posvector = pygame.math.Vector2(
@@ -2121,7 +2121,7 @@ class Viewer:
         self.panelscreen.fill(Viewer.panelcolor)
         write(
             background=self.panelscreen,
-            text="the panel \u2566\u2569",
+            text="panel \u2566\u2569",
             x=5,
             y=5,
             color=(0, 0, 255),
@@ -2177,11 +2177,14 @@ class Viewer:
         write(
             self.panelscreen, "{:>3}".format(food), 130, 200, font_size=32
         )  # gold text
-        # ---- downloads ----
-        self.panelscreen.blit(make_text("\U0001F4BE"), (-5, 230))
+        # ---- downloads ---- : disk icon
+        self.panelscreen.blit(make_text("\U0001F4BE", fontsize=32), (-15, 220))
         write(
-            self.panelscreen, "{:>3}".format(Game.player.downloads),
-            25, 230, font_size=32
+            self.panelscreen,
+            "{:>3}".format(Game.player.downloads),
+            25,
+            230,
+            font_size=32,
         )
 
     def make_log(self):
@@ -2481,20 +2484,23 @@ class Viewer:
         items = []
         monsters = []
         effects = []
-        if not tile.explored:
-            text = "unexplored tile"
-        else:
-            if isinstance(tile, Door):
-                text = "{} door".format(
-                    "a locked"
-                    if tile.locked
-                    else "a closed"
-                    if tile.closed
-                    else "an open"
-                )
+        text = "?"
+        if not tile.fov:
+            if not tile.explored:
+                text = "Structure: unexplored tile"
             else:
-                text = tile.__class__.__name__
-        if tile.fov:
+                if isinstance(tile, Door):
+                    text = "Structure: {} door".format(
+                        "a locked"
+                        if tile.locked
+                        else "a closed"
+                        if tile.closed
+                        else "an open"
+                    )
+                else:
+                    text = "Structure: " + tile.__class__.__name__
+        else:
+            text = "Structure: " + tile.__class__.__name__
             for e in [
                 e
                 for e in Game.effects.values()
@@ -2504,7 +2510,8 @@ class Viewer:
             for i in [
                 i
                 for i in Game.items.values()
-                if not i.backpack and i.z == hero.z and i.x == tx and i.y == ty
+                if (not i.backpack and i.z == hero.z and i.x == tx and i.y == ty
+                    and not (isinstance(i, Trap) and not i.detected))
             ]:
                 items.append(i)
             for m in [
@@ -2521,37 +2528,23 @@ class Viewer:
             Viewer.panelcolor,
             (0, y, Viewer.panelwidth, Viewer.height - y),
         )
-        if tile.explored:
-            write(self.panelscreen, tile.char, 0, y - 0, (0, 150, 0), font_size=25)
         y += 5
-        write(self.panelscreen, text, 50, y, (0, 0, 0), font_size=12)
+        write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14) # structure
         for e in effects:
             y += 15
-            write(self.panelscreen, e.char, 0, y, e.fgcolor, font_size=20)
-            write(
-                self.panelscreen, e.__class__.__name__, 50, y, (0, 0, 0), font_size=12
-            )
+            text = e.__class__.__base__.__name__ + ": " + e.__class__.__name__
+            #write(self.panelscreen, e.char, 0, y, e.fgcolor, font_size=20)
+            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)
         for m in monsters:
             y += 15
-            write(self.panelscreen, m.char, 0, y, m.fgcolor, font_size=20)
-            write(
-                self.panelscreen, m.__class__.__name__, 50, y, (0, 0, 0), font_size=12
-            )
+            text = m.__class__.__base__.__name__ + ": " + m.__class__.__name__
+            #write(self.panelscreen, m.char, 0, y, m.fgcolor, font_size=20)
+            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14 )
         for i in items:
             y += 15
-            write(self.panelscreen, i.char, 0, y, i.fgcolor, font_size=20)
-            write(
-                self.panelscreen,
-                i.__class__.__name__,
-                50,
-                y,
-                (
-                    0,
-                    0,
-                    0,
-                ),
-                font_size=12,
-            )
+            text = i.__class__.__base__.__name__ + ": " + i.__class__.__name__
+            #write(self.panelscreen, i.char, 0, y, i.fgcolor, font_size=20)
+            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14,)
 
     def run(self):
         """The mainloop"""
@@ -2564,7 +2557,7 @@ class Viewer:
         # pygame.mouse.set_visible(False)
         oldleft, oldmiddle, oldright = False, False, False
 
-        #Bubble(pos=pygame.math.Vector2(200, 200), age=-1)
+        # Bubble(pos=pygame.math.Vector2(200, 200), age=-1)
         Flytext(
             pos=pygame.math.Vector2(Viewer.width // 2, Viewer.height // 2),
             move=pygame.math.Vector2(0, -15),
@@ -2661,8 +2654,12 @@ class Viewer:
                         if event.key == pygame.K_e and len(self.flytextgroup) == 0:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
-                            if hero.y > 0 and isinstance(Game.dungeon[hero.z][hero.y-1][hero.x], Terminal):
-                                Game.dungeon[hero.z][hero.y-1][hero.x].effect_download()
+                            if hero.y > 0 and isinstance(
+                                Game.dungeon[hero.z][hero.y - 1][hero.x], Terminal
+                            ):
+                                Game.dungeon[hero.z][hero.y - 1][
+                                    hero.x
+                                ].effect_download()
                             else:
                                 self.loglines.extend(self.g.eat())
                             repaint = True
@@ -2984,22 +2981,37 @@ def make_text(
     mono=False,
     alpha=None,
     font=Viewer.font,
+    fontsize = None,
 ):
     """returns pygame surface (Viewer.gridsize[0] x Viewer.gridsize[1]) with text blitted on it.
     The text is centered on the surface. Font_size = Viewer.fontsize
     You still need to blit the surface.
     Use pygame.rect methods to get width and height of the new surface
+
+    :param str text: the text to render into the surface
+    :param (int, int, int) fgcolor: text color
+    :param (int, int, int) bgcolor: background color or None for transparent background
+    :param float rotation: render rotation for text (does not work with mono)
+    :param int style: constant for text style (does not work with mono). See pygame.freetype
+    :param (int,int) size: size of Surface in pixel. If None, takes (Viewer.fontsize x Viewer.fontsize)
+    :param bool mono: if True, use pygame.font.Font to render (better for non-proportional chars like wall-tiles)
+    :param int alpha: alpha value for the whole Surface, if set to None the color (0,0,0) will be used as colorkey
+    :param font: font object. If mono, -> pygame.font.Font(fontobject. If not mono: pygame.freetype.Font(fontobject)
+    :param int fontsize: size of font
+    :return: pygame.Surface
     """
     if size is None:
         size = (Viewer.fontsize, Viewer.fontsize)
     if not isinstance(size, tuple) and not isinstance(size, list):
         size = (size, size)
+    if fontsize is None:
+        fontsize = Viewer.fontsize
     if mono:
         if font is None:
             font = Viewer.monofontfilename
         # myfont = Viewer.monofontfilename
         # oldfont = pg.font.Font(os.path.join(fontdir, "..", "data", "fonts", "FreeMonoBold.otf"), fontsize)
-        myfont = pygame.font.Font(font, size[0])
+        myfont = pygame.font.Font(font, fontsize)
         # pic = oldfont.render(chars[char_index], True, (255, 64, 64))
         # rect = pic.get_rect()
         text1 = myfont.render(text, True, fgcolor)
@@ -3008,7 +3020,7 @@ def make_text(
         if font is None:
             font = Viewer.font
         font.origin = False  # make sure to blit from topleft corner
-        text1, rect1 = font.render(text, fgcolor, bgcolor, style, rotation, size)
+        text1, rect1 = font.render(text, fgcolor, bgcolor, style, rotation, fontsize)
 
     surf = pygame.Surface(Viewer.gridsize)
     if alpha is None:
@@ -3158,21 +3170,33 @@ def write(
     color=(0, 0, 0),
     font_size=None,
     origin="topleft",
-    mono=True,
+    mono=False,
     rotation=0,
     style=pygame.freetype.STYLE_STRONG,
 ):
     """blit text on a given pygame surface (given as 'background')
-    the origin is the alignment of the text surface
-    origin can be 'center', 'centercenter', 'topleft', 'topcenter', 'topright', 'centerleft', 'centerright',
+
+    :param  background:  A pygame Surface
+    :param str text:    The text to blit
+    :param int x:  x-position of text (see origin)
+    :param int y:  y-postiont of text (see origin)
+    :param (int, int, int) color: text color
+    :param int font_size: size of font
+    :param str origin: can be one of those values: 'center', 'centercenter', 'topleft', 'topcenter', 'topright', 'centerleft', 'centerright',
     'bottomleft', 'bottomcenter', 'bottomright'
+    :param bool mono: DOES NOT WORK ! if True, use Viewer.monofont instead of Viewer.font
+    :param int rotation: text rotation
+    :param int style: text style, see pygame.freetype
     """
     if font_size is None:
         font_size = 24
     # font = Viewer.font # pygame.font.SysFont(font_name, font_size, bold)
-    # font = pygame.font.Font(Viewer.fontfile, font_size)
-    font = Viewer.font
-    surface, rrect = font.render(text, color, rotation=rotation, size=font_size)
+
+    if mono:
+        font=Viewer.monofont
+    else:
+        font = Viewer.font
+    surface, rrect = font.render(text, color, rotation=rotation, size=font_size, style=style)
     width, height = rrect.width, rrect.height
     # surface = font.render(text, True, color)
 
@@ -3262,8 +3286,8 @@ if __name__ == "__main__":
         gridsize=(64, 64),
         panelwidth=200,
         logheight=100,
-        fontsize=64,
-        wallfontsize=100,
+        fontsize=48,
+        wallfontsize=105,
         max_tiles_x=200,
         max_tiles_y=200,
     )
