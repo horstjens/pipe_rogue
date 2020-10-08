@@ -297,7 +297,7 @@ class Flytext(VectorSprite):
         text="hallo",
         color=(255, 0, 0),
         bgcolor=None,
-        max_age=1,
+        max_age=0.5,
         age=0,
         acceleration_factor=1.0,
         fontsize=48,
@@ -546,7 +546,7 @@ class Bubble(VectorSprite):
     def _overwrite_parameters(self):
         self.speed = random.randint(10, 50)
         if self.max_age is None:
-            self.max_age = 0.5 + random.random() * 1.5
+            self.max_age = 0.2 + random.random() * 0.5
         self.kill_on_edge = True
         self.kill_with_boss = False  # VERY IMPORTANT!!!
         if self.move == pygame.math.Vector2(0, 0):
@@ -1055,6 +1055,39 @@ class Game:
                 Game.running = False
                 return text
             del Game.zoo[m.number]
+
+        # ------- burning oil -------
+        # create flames from burning oil
+        for y, line in enumerate(Game.dungeon[hero.z]):
+            for x, t in enumerate(line):
+                if isinstance(t, Oil) and t.burning:
+                    Fire(tx=x,ty=y, max_age=1 )
+
+
+        # spread fire to other oil
+        for y, line in enumerate(Game.dungeon[hero.z]):
+            for x, t in enumerate(line):
+                if isinstance(t, Oil) and t.burning:
+                    for dx, dy in [(0,-1), (1,-1), (1,0),  (1,1),
+                                   (0,1),  (-1,1), (-1,0), (-1,-1)]:
+                        try:
+                            t2 = Game.dungeon[hero.z][y+dy][x+dx]
+                        except IndexError:
+                            continue
+                        if isinstance(t2, Oil) and not t2.burning:
+                            t2.burning = True
+
+
+
+        # ---- Fire on Oil makes Oil burning
+        for e in Game.effects.values():
+            if isinstance(e, Fire):
+                t = Game.dungeon[hero.z][e.ty][e.tx]
+                if isinstance(t, Oil) and not t.burning:
+                    if random.random() < 0.2:    # chance to ignite
+                        t.burning = True
+
+        # ---------------------------
         self.calculate_fov()
         return text
 
@@ -1254,6 +1287,20 @@ class Structure:
 
 class Floor(Structure):
     char = " "
+
+
+class Oil(Structure):
+    char = ":"
+    fgcolor = (87,71,31)  # brown
+    block_sight = False
+    block_movement = False
+    block_shooting = False
+
+    def __init__(self, nesw=None):
+        super().__init__(nesw)
+        self.burning = False
+
+
 
 
 class Terminal(Structure):
@@ -1507,12 +1554,12 @@ class Item:
             number_of_bubbles = 5
         px, py = Viewer.tile_to_pixel((self.x, self.y))
         posvector = pygame.math.Vector2(px, py)
-        yspeed = random.randint(-20,-5)
+        yspeed = random.randint(-20, -5)
         yacc = 1.0 + random.random() * 0.15
         Flytext(
             pos=posvector,
             move=pygame.math.Vector2(0, yspeed),
-            acceleration_factor= yacc,
+            acceleration_factor=yacc,
             text=ftext,
             color=self.fgcolor,
             fontsize=32,
@@ -1560,6 +1607,10 @@ class Trap(Item):
     pictures = []
     fgcolor = (128, 128, 128)
     char = "\U0001F4A3"  # bomb # 2620"  # skull and bones
+
+    @classmethod
+    def create_pictures(cls):  # make the char into a picture
+        cls.pictures.append(make_text(cls.char, cls.fgcolor, font=Viewer.font2))
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1695,7 +1746,7 @@ class Dragon(Monster):
 
     pictures = []
     fgcolor = (255, 90, 0)  # orange
-    char = "D"
+    char = "\U0001F409"
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1716,7 +1767,7 @@ class Dragon(Monster):
                     # print("feuerspucke")
                     points = get_line((self.x, self.y), (Game.player.x, Game.player.y))
                     for f in points[:6]:
-                        Fire(f[0], f[1], max_age=3)
+                        Fire(f[0], f[1], max_age=1)
 
         dx = random.choice(
             (
@@ -2510,8 +2561,13 @@ class Viewer:
             for i in [
                 i
                 for i in Game.items.values()
-                if (not i.backpack and i.z == hero.z and i.x == tx and i.y == ty
-                    and not (isinstance(i, Trap) and not i.detected))
+                if (
+                    not i.backpack
+                    and i.z == hero.z
+                    and i.x == tx
+                    and i.y == ty
+                    and not (isinstance(i, Trap) and not i.detected)
+                )
             ]:
                 items.append(i)
             for m in [
@@ -2529,22 +2585,29 @@ class Viewer:
             (0, y, Viewer.panelwidth, Viewer.height - y),
         )
         y += 5
-        write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14) # structure
+        write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)  # structure
         for e in effects:
             y += 15
             text = e.__class__.__base__.__name__ + ": " + e.__class__.__name__
-            #write(self.panelscreen, e.char, 0, y, e.fgcolor, font_size=20)
+            # write(self.panelscreen, e.char, 0, y, e.fgcolor, font_size=20)
             write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)
         for m in monsters:
             y += 15
             text = m.__class__.__base__.__name__ + ": " + m.__class__.__name__
-            #write(self.panelscreen, m.char, 0, y, m.fgcolor, font_size=20)
-            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14 )
+            # write(self.panelscreen, m.char, 0, y, m.fgcolor, font_size=20)
+            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)
         for i in items:
             y += 15
             text = i.__class__.__base__.__name__ + ": " + i.__class__.__name__
-            #write(self.panelscreen, i.char, 0, y, i.fgcolor, font_size=20)
-            write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14,)
+            # write(self.panelscreen, i.char, 0, y, i.fgcolor, font_size=20)
+            write(
+                self.panelscreen,
+                text,
+                5,
+                y,
+                (0, 0, 0),
+                font_size=14,
+            )
 
     def run(self):
         """The mainloop"""
@@ -2981,7 +3044,7 @@ def make_text(
     mono=False,
     alpha=None,
     font=Viewer.font,
-    fontsize = None,
+    fontsize=None,
 ):
     """returns pygame surface (Viewer.gridsize[0] x Viewer.gridsize[1]) with text blitted on it.
     The text is centered on the surface. Font_size = Viewer.fontsize
@@ -3193,10 +3256,12 @@ def write(
     # font = Viewer.font # pygame.font.SysFont(font_name, font_size, bold)
 
     if mono:
-        font=Viewer.monofont
+        font = Viewer.monofont
     else:
         font = Viewer.font
-    surface, rrect = font.render(text, color, rotation=rotation, size=font_size, style=style)
+    surface, rrect = font.render(
+        text, color, rotation=rotation, size=font_size, style=style
+    )
     width, height = rrect.width, rrect.height
     # surface = font.render(text, True, color)
 
@@ -3241,6 +3306,7 @@ legend = {
     "ß": Snake,
     "T": Trap,
     "t": Terminal,
+    ":": Oil,
 }
 level1 = """
 ######################################
@@ -3257,15 +3323,15 @@ level2 = """
 #..<............................................................#
 #>..............................................................#
 #...............................................................#
-#...............................................................#
-#...............##d###..........................................#
-#.....W.........#....#..........................................#
-#...............#..S.d..........................................#
-#...............#....##............D..................D.........#
-#...............#.....#.........................................#
-#.kk.k.k........d.....##........................................#
-#...............###d####........................................#
-#...............................................................#
+#..................................................:::::::::::::#
+#...............##d#####......:::::::...............::::::::::::#
+#...............#......#......:::::::..............:::::::::::::#
+#...............#..D.. d......:::::::..............:::::::::::::#
+#...............#......#......:::::::...........................#
+#...............#.D  ..d........................................#
+#.kk.k.k........d..D...##.......................................#
+#...............###d#####.......................................#
+#..WS...........................................................#
 #...............................................................#
 #...............................................................#
 #################################################################"""
