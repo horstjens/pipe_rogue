@@ -1723,7 +1723,7 @@ class Food(Item):
 
 class Buff:
     pictures = []
-    fgcolor = (0,200,0)
+    fgcolor = (0, 200, 0)
 
 
 class Monster:
@@ -1930,15 +1930,15 @@ class Player(Monster):
     pictures = []
     char = "\u263A"  # "\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
     fgcolor = (0, 0, 255)
-    shield_upkeep = 1 # 1 mana per turn
+    shield_upkeep = 1  # 1 mana per turn
     mana_regeneration = 0.1
-    shield_cost = 15 # mana cost to activate shield
+    shield_cost = 15  # mana cost to activate shield
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
         self.mana = 100
-        #self.mana_regeneration = 0.1
+        # self.mana_regeneration = 0.1
         self.friendly = True
         self.downloads = 0
         self.shield = False
@@ -1949,7 +1949,7 @@ class Player(Monster):
         if self.shield:
             self.mana -= self.shield_upkeep
             if self.mana < 1:
-                Flytext(tx= self.x, ty=self.y, text="not enough mana for shield")
+                Flytext(tx=self.x, ty=self.y, text="not enough mana for shield")
                 self.shield = False
         # --- mana regeneration ----
         self.mana += self.mana_regeneration
@@ -2307,7 +2307,11 @@ class Viewer:
             (73, 220),
         )
         write(
-            self.panelscreen, "{:>3.1f}".format(Game.player.mana), 130, 240, font_size=32
+            self.panelscreen,
+            "{:>3.1f}".format(Game.player.mana),
+            130,
+            240,
+            font_size=32,
         )
 
     def make_log(self):
@@ -2474,10 +2478,14 @@ class Viewer:
                     # monstercounter = len(monsters)
                     for m in monsters:
                         self.screen.blit(m.fovpicture(), (x, y))
-                        if isinstance(m, Player) and m.shield: # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
+                        if (
+                            isinstance(m, Player) and m.shield
+                        ):  # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
                             self.screen.blit(
                                 make_text(
-                                    "\U0001F53B", fgcolor=(0, 0, 255), alpha=200,
+                                    "\U0001F53B",
+                                    fgcolor=(0, 0, 255),
+                                    alpha=200,
                                 ),
                                 (x, y),
                             )
@@ -3128,7 +3136,7 @@ def make_text(
     alpha=None,
     font=Viewer.font,
     fontsize=None,
-    colorkey=(0,0,0)
+    colorkey=(0, 0, 0),
 ):
     """returns pygame surface (Viewer.gridsize[0] x Viewer.gridsize[1]) with text blitted on it.
     The text is centered on the surface. Font_size = Viewer.fontsize
@@ -3169,17 +3177,17 @@ def make_text(
         # rect = pic.get_rect()
         text1 = myfont.render(text, True, fgcolor)
         rect1 = text1.get_rect()
-        #midtx = rect1.width // 2
-        #midty = rect1.height // 2
-        #surf.blit(text1, (midx - midtx, midy - midty))
+        # midtx = rect1.width // 2
+        # midty = rect1.height // 2
+        # surf.blit(text1, (midx - midtx, midy - midty))
     else:
         if font is None:
             font = Viewer.font
         font.origin = False  # make sure to blit from topleft corner
-        #rect1 = font.get_rect(text, style, rotation, fontsize)
-        #midtx = rect1.width // 2
-        #midty = rect1.height // 2
-        #rect2  = font.render_to(surf, (midx-midtx,midy-midty), text, fgcolor, bgcolor, style, rotation, fontsize)
+        # rect1 = font.get_rect(text, style, rotation, fontsize)
+        # midtx = rect1.width // 2
+        # midty = rect1.height // 2
+        # rect2  = font.render_to(surf, (midx-midtx,midy-midty), text, fgcolor, bgcolor, style, rotation, fontsize)
         text1, rect1 = font.render(text, fgcolor, bgcolor, style, rotation, fontsize)
     # finally
     midtx = rect1.width // 2
@@ -3189,8 +3197,8 @@ def make_text(
     if colorkey is not None:
         surf.set_colorkey(colorkey)
     if alpha is not None:
-        #surf.set_colorkey((0, 0, 0))
-    #else:
+        # surf.set_colorkey((0, 0, 0))
+        # else:
         surf.set_alpha(alpha)
     surf.convert_alpha()
     return surf
