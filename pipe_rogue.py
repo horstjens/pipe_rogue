@@ -33,6 +33,12 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: shield: should protect from combat (and fire?) damange, should prevent attacking in meleee
+# TODO: monster update should call monster_ai
+# TODO: GUI buttons for commands
+# TODO: GUI yes-no box
+# TODO: save and load game to/from disk
+# TODO: replace soup and food icons with noto font glyph u1F35C
 # TODO: arrow should end flying BEFORE monster start moving away
 # TODO: better (longer) chars / glyphs for glass window, door
 # TODO: better code for FireDragon ( hunt/flee ), keep distance, reload...
@@ -55,6 +61,8 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: shield: better icon : mushroom -> triangle Noto font
+# done: shield: alpha for whole bitmap only works on Mac.
 # done: make disk icon in panel smaller
 # done: make correct docstring for make_text
 # done: make font in download_effect smaller
@@ -691,7 +699,6 @@ class Game:
                     neighbors.append(new_level[ty + dy][tx + dx])
                 Game.dungeon[z][ty][tx].create_pictures(neighbors)
 
-
     def bgcolor(self, distance, mingrey=0, maxgrey=255):
         """calculates a background (grey) color value, depending on
         distance from torch (player)
@@ -943,6 +950,7 @@ class Game:
         Game.turn_number += 1
         text = []
         hero = Game.player
+        hero.update()
         # tile = Game.dungeon[hero.z][hero.y][hero.x]
 
         # --------- move the hero --------------
@@ -1453,9 +1461,9 @@ class Door(Structure):
         else:
             raise ValueError("strange position of Door", list_of_neighbors)
         if self.horizontal:
-            self.char = "\u2500" # ""-"
+            self.char = "\u2500"  # ""-"
         elif self.vertical:
-            self.char = "\u2502" #"|"
+            self.char = "\u2502"  # "|"
         super().create_pictures(fontsize=Viewer.fontsize)
 
     def open(self):
@@ -1478,9 +1486,9 @@ class Door(Structure):
         self.block_movement = True
         self.block_shooting = True  # set false for grille door etc.
         if self.horizontal:
-            self.char = "\u2500" # ""-"
+            self.char = "\u2500"  # ""-"
         elif self.vertical:
-            self.char = "\u2502" #"|"
+            self.char = "\u2502"  # "|"
         super().create_pictures(fontsize=Viewer.fontsize)
 
 
@@ -1523,10 +1531,10 @@ class Glass(Structure):
 
         if walls[0] and walls[2]:
             self.vertical = True  # north and south neighbor is wall/ other door
-            self.char = "\u2502" # ""|"
+            self.char = "\u2502"  # ""|"
         elif walls[1] and walls[3]:
             self.horizontal = True  # west and east neighbor is wall / other door
-            self.char = "\u2500" # ""-"
+            self.char = "\u2500"  # ""-"
         else:
             self.char = "+"
         super().create_pictures(fontsize=Viewer.fontsize)
@@ -1544,13 +1552,13 @@ class Glass(Structure):
 class StairDown(Structure):
 
     fgcolor = (150, 50, 90)  # dark pink
-    char = "\u21F2" #"\u21A7"  # downwards arrow from bar
+    char = "\u21F2"  # "\u21A7"  # downwards arrow from bar
 
 
 class StairUp(Structure):
 
     fgcolor = (60, 200, 200)  # cyan
-    char = "\u21F1" # "# "\u21A5"  # upwards arrow from bar
+    char = "\u21F1"  # "# "\u21A5"  # upwards arrow from bar
 
 
 class Item:
@@ -1713,6 +1721,11 @@ class Food(Item):
         self.flytext_and_bubbles(lookup[self.food_value], self.food_value * 5)
 
 
+class Buff:
+    pictures = []
+    fgcolor = (0,200,0)
+
+
 class Monster:
     """Monsters can move around"""
 
@@ -1738,10 +1751,15 @@ class Monster:
         self.x = x
         self.y = y
         self.z = z
+        self.buffs = []
         self.hp = 10  # this MUST be an instance attribute because each monster has individual hp
         # self.fgcolor = (255,0,0)# "red"
         self.friendly = False  # friendly towards player?
         # self.char = "M"  # Monster
+
+    def update(self):
+        """called once per game-turn for each monster"""
+        pass
 
     def fovpicture(self):
         # print("returning fovpicture of", self.__class__.__name__)
@@ -1912,34 +1930,44 @@ class Player(Monster):
     pictures = []
     char = "\u263A"  # "\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
     fgcolor = (0, 0, 255)
+    shield_upkeep = 1 # 1 mana per turn
+    mana_regeneration = 0.1
+    shield_cost = 15 # mana cost to activate shield
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
         self.mana = 100
-        self.mana_regenaration = 0.1
+        #self.mana_regeneration = 0.1
         self.friendly = True
         self.downloads = 0
         self.shield = False
         # self.backpack = [] # container for transported items
 
+    def update(self):
+        """called once per game turn"""
+        if self.shield:
+            self.mana -= self.shield_upkeep
+            if self.mana < 1:
+                Flytext(tx= self.x, ty=self.y, text="not enough mana for shield")
+                self.shield = False
+        # --- mana regeneration ----
+        self.mana += self.mana_regeneration
+        self.mana = between(self.mana, 0, 100)
+
     def toggle_shield(self):
-        if self.shield:   # turn shield off
+        if self.shield:  # turn shield off
             self.shield = False
-            Flytext(tx=self.x, ty=self.y,
-                    text="shield deactivated")
+            Flytext(tx=self.x, ty=self.y, text="shield deactivated")
             return
         # turn shield on if enoug mana
         if self.mana <= 15:
-            Flytext(tx=self.x, ty=self.y,
-                    text="not enough mana!")
+            Flytext(tx=self.x, ty=self.y, text="not enough mana!")
             return
         # activate shield
-        self.mana -= 15
+        self.mana -= self.shield_cost
         self.shield = True
-        Flytext(tx=self.x, ty=self.y,
-                text="shield activated!")
-
+        Flytext(tx=self.x, ty=self.y, text="shield activated!")
 
 
 class Viewer:
@@ -2094,7 +2122,7 @@ class Viewer:
             sc.create_pictures()
         for sc in Monster.__subclasses__():
             sc.create_pictures()
-        Monster.create_pictures() # twice??
+        Monster.create_pictures()  # twice??
 
     def make_radar(self):
         self.radarscreen.fill((0, 0, 0))  # fill black
@@ -2273,14 +2301,14 @@ class Viewer:
             230,
             font_size=32,
         )
+        # ----------------mana--------------
         self.panelscreen.blit(
-            make_text("\U0001F344",
-                      fgcolor=(0,0,255),
-                      size=(32,32),
-                      fontsize=32),
-            (73, 220))
-        write(self.panelscreen, "{:>3}".format(Game.player.mana),
-              130, 240, font_size=32)
+            make_text("\U0001F344", fgcolor=(0, 0, 255), size=(32, 32), fontsize=32),
+            (73, 220),
+        )
+        write(
+            self.panelscreen, "{:>3.1f}".format(Game.player.mana), 130, 240, font_size=32
+        )
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -2446,11 +2474,13 @@ class Viewer:
                     # monstercounter = len(monsters)
                     for m in monsters:
                         self.screen.blit(m.fovpicture(), (x, y))
-                        if isinstance(m, Player):
-                            if m.shield:
-                                self.screen.blit(make_text("\U0001F344",
-                                        fgcolor=(0,0,255), alpha=128),
-                                                 (x,y))
+                        if isinstance(m, Player) and m.shield: # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
+                            self.screen.blit(
+                                make_text(
+                                    "\U0001F53B", fgcolor=(0, 0, 255), alpha=200,
+                                ),
+                                (x, y),
+                            )
 
                     # ------------- effects --------------
                     for e in [
@@ -3098,6 +3128,7 @@ def make_text(
     alpha=None,
     font=Viewer.font,
     fontsize=None,
+    colorkey=(0,0,0)
 ):
     """returns pygame surface (Viewer.gridsize[0] x Viewer.gridsize[1]) with text blitted on it.
     The text is centered on the surface. Font_size = Viewer.fontsize
@@ -3114,6 +3145,7 @@ def make_text(
     :param int alpha: alpha value for the whole Surface, if set to None the color (0,0,0) will be used as colorkey
     :param font: font object. If mono, -> pygame.font.Font(fontobject. If not mono: pygame.freetype.Font(fontobject)
     :param int fontsize: size of font
+    :param (int,int,int) colorkey: colorkey, can be set to None
     :return: pygame.Surface
     """
     if size is None:
@@ -3122,6 +3154,11 @@ def make_text(
         size = (size, size)
     if fontsize is None:
         fontsize = Viewer.fontsize
+    surf = pygame.Surface(Viewer.gridsize)
+
+    midx = Viewer.gridsize[0] // 2
+    midy = Viewer.gridsize[1] // 2
+
     if mono:
         if font is None:
             font = Viewer.monofontfilename
@@ -3132,22 +3169,30 @@ def make_text(
         # rect = pic.get_rect()
         text1 = myfont.render(text, True, fgcolor)
         rect1 = text1.get_rect()
+        #midtx = rect1.width // 2
+        #midty = rect1.height // 2
+        #surf.blit(text1, (midx - midtx, midy - midty))
     else:
         if font is None:
             font = Viewer.font
         font.origin = False  # make sure to blit from topleft corner
+        #rect1 = font.get_rect(text, style, rotation, fontsize)
+        #midtx = rect1.width // 2
+        #midty = rect1.height // 2
+        #rect2  = font.render_to(surf, (midx-midtx,midy-midty), text, fgcolor, bgcolor, style, rotation, fontsize)
         text1, rect1 = font.render(text, fgcolor, bgcolor, style, rotation, fontsize)
-
-    surf = pygame.Surface(Viewer.gridsize)
-    if alpha is None:
-        surf.set_colorkey((0, 0, 0))
-    surf.convert_alpha()
-
-    midx = Viewer.gridsize[0] // 2
-    midy = Viewer.gridsize[1] // 2
+    # finally
     midtx = rect1.width // 2
     midty = rect1.height // 2
     surf.blit(text1, (midx - midtx, midy - midty))
+    # ---- alpha -----
+    if colorkey is not None:
+        surf.set_colorkey(colorkey)
+    if alpha is not None:
+        #surf.set_colorkey((0, 0, 0))
+    #else:
+        surf.set_alpha(alpha)
+    surf.convert_alpha()
     return surf
 
 
