@@ -33,7 +33,9 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
-
+# TODO: better (longer) chars / glyphs for glass window, door
+# TODO: better code for FireDragon ( hunt/flee ), keep distance, reload...
+# TODO: Flames / Water becoming smaller and smaller before disappearing
 # TODO: progress bar
 # TODO: learn LayerdDirty Spritegroups, update all sprites to DirtySprites -> make dirty and visible work correctly
 # TODO: game menu, death of player -> newstart
@@ -458,7 +460,7 @@ class Flytext(VectorSprite):
 
     def update(self, seconds):
         VectorSprite.update(self, seconds)
-        print("Flytext age:", self.age, self.visible)
+        #print("Flytext age:", self.age, self.visible)
         if self.age < 0:
             return
         self.move *= self.acceleration_factor
@@ -599,7 +601,10 @@ class Game:
     lookup_nesw = {(-1, 0): 0, (0, 1): 1, (1, 0): 2, (0, -1): 3}
 
     def __init__(self):
-        self.create_dungeon([level1, level2, level3])
+        #self.create_dungeon([level1, level2, level3])
+        for z, level in enumerate( [level1, level2, level3]):
+            self.create_dungeon2(level, z)
+
         # extra food on2,4
         Food(2, 4, 0)
         # --------extra effects at start of game --------------
@@ -623,6 +628,62 @@ class Game:
         Game.effects = {
             k: v for k, v in Game.effects.items() if not v.destroy
         }  # remove destroyed effects
+
+
+    def create_dungeon2(self, raw_level, z):
+        """append or replace level z in Game.dungeons, created from raw_level
+        expect 'legend' dictionary {char:ClassName,..} at module level
+
+        :param str raw_level:   a multi-lined text made up of chars for dungeon, according to dict 'legend'
+        :param int z:           index of the new level in Game.dungeons. Use to append / replace level
+        :return: None
+        """
+        raw = [list(line) for line in raw_level.splitlines() if len(line) > 1]
+        new_level = []
+        for ty, line in enumerate(raw):
+            new_line = []
+            for tx, char in enumerate(line):
+                # monsters (including the player) and items generate a floor tile
+                myclass = legend[char] # legend is a top-level variable
+                classnames = [c.__name__ for c in myclass.mro()]  # classname.mro() displays all superclasses
+                if "Monster" in classnames or "Item" in classnames:
+                    new_line.append(Floor())
+                    if char == "@":
+                        Game.player = Player(tx, ty, z)
+                    else:
+                        myclass(tx, ty, z) # Monsters go to Game.zoo, Items go to Game.items
+                else:
+                    new_line.append(myclass())
+            new_level.append(new_line)
+        # ------------ append (or replace) new level to Game.dungeon -----------------------------
+        if z == len(Game.dungeon):
+            Game.dungeon.append(new_level)
+        elif 0 <= z < len(Game.dungeon):
+            Game.dungeon[z] = new_level
+        else:
+            raise ValueError("z too big for Game.dungeon")
+        # --------------------- create picture for each structure tile , depending on neighbors -----------------------
+        for ty, line in enumerate(new_level):
+            for tx, tile in enumerate(line):
+                print("creating pic for:", Game.dungeon[z][ty][tx].__class__.__name__, tx, ty)
+                # get neighboring tiles to create picture:
+                # start at 12:00 and move clockwise
+                neighbors = []
+                #for dx, dy in [(0,-1), (1,-1),(1,0),(1,1),(0,1),(-1,1),(-1,0),(-1,-1)]:
+                for dx, dy in [(0,-1),(1,0),(0,1),(-1,0)]:
+                    if tx + dx < 0 or tx + dx >= len(line) or ty+dy < 0 or ty+dy >= len(new_level):
+                        neighbors.append(None)
+                        continue
+                    neighbors.append(new_level[ty+dy][tx+dx])
+                Game.dungeon[z][ty][tx].create_pictures(neighbors)
+
+
+
+
+
+
+
+
 
     @staticmethod
     def create_dungeon(list_of_raw_levels):
@@ -1061,30 +1122,35 @@ class Game:
         for y, line in enumerate(Game.dungeon[hero.z]):
             for x, t in enumerate(line):
                 if isinstance(t, Oil) and t.burning:
-                    Fire(tx=x,ty=y, max_age=1 )
-
+                    Fire(tx=x, ty=y, max_age=1)
 
         # spread fire to other oil
         for y, line in enumerate(Game.dungeon[hero.z]):
             for x, t in enumerate(line):
                 if isinstance(t, Oil) and t.burning:
-                    for dx, dy in [(0,-1), (1,-1), (1,0),  (1,1),
-                                   (0,1),  (-1,1), (-1,0), (-1,-1)]:
+                    for dx, dy in [
+                        (0, -1),
+                        (1, -1),
+                        (1, 0),
+                        (1, 1),
+                        (0, 1),
+                        (-1, 1),
+                        (-1, 0),
+                        (-1, -1),
+                    ]:
                         try:
-                            t2 = Game.dungeon[hero.z][y+dy][x+dx]
+                            t2 = Game.dungeon[hero.z][y + dy][x + dx]
                         except IndexError:
                             continue
                         if isinstance(t2, Oil) and not t2.burning:
                             t2.burning = True
-
-
 
         # ---- Fire on Oil makes Oil burning
         for e in Game.effects.values():
             if isinstance(e, Fire):
                 t = Game.dungeon[hero.z][e.ty][e.tx]
                 if isinstance(t, Oil) and not t.burning:
-                    if random.random() < 0.2:    # chance to ignite
+                    if random.random() < 0.2:  # chance to ignite
                         t.burning = True
 
         # ---------------------------
@@ -1257,6 +1323,7 @@ class Structure:
     structures do not have a x,y,z coordinate because they
     exist only in the dungeon array. the position inside
     the array equals to x,y. See Wall class docstring for detecting neighbors
+    expcets create_pictures to be called with list of neighboring tiles as arguments
     """
 
     fgcolor = (0, 150, 0)
@@ -1266,23 +1333,88 @@ class Structure:
     nesw_tile = None  # if this is a char, fill self.nesw with True for north, east, south, west neigbors
     exploredpic = None  # will be overwritten by create_pictures
     fovpic = None  # will be overwritten by create_pictures
+    char = "?"  # simple char to use for rendering if nothing else is given in create_pictures
 
-    @classmethod
-    def create_pictures(cls):
-        cls.exploredpic = make_text(cls.char, Viewer.explored_fgcolor)
-        cls.fovpic = make_text(cls.char, cls.fgcolor)
+    #@classmethod
+    #def create_pictures(cls, neighbor_list):
+    #    cls.exploredpic = make_text(cls.char, Viewer.explored_fgcolor)
+    #    cls.fovpic = make_text(cls.char, cls.fgcolor)
 
-    def exploredpicture(self):
-        return self.exploredpic
+    #def exploredpicture(self):
+    #    return self.exploredpic
 
-    def fovpicture(self):
-        return self.fovpic
+    #def fovpicture(self):
+    #    return self.fovpic
 
-    def __init__(self, nesw=None):
+    def __init__(self):
         self.explored = False  # stay visible on map, but with fog of war
         self.fov = False  # currently in field of view of player?
-        self.char = None  # for textual representation btw for make_text(char)
-        self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
+        #self.char = None  # for textual representation btw for make_text(char)
+        #self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
+
+    def create_pictures(self, neighborlist=None, fontsize=48, mono=False):
+        self.exploredpic = make_text(self.char, Viewer.explored_fgcolor, fontsize=fontsize, mono=mono)
+        self.fovpic =  make_text(self.char, self.fgcolor, fontsize=fontsize, mono=mono)
+
+
+
+class Wall(Structure):
+    """walls have a specail char depending on neighboring walls
+    Viewer.load_images calls once Wall.create_pictures()
+    Wall.create_pictures fill the exploredpictures and fovpictures dicts with the correct bitmaps
+    by calculating the picture according to its neighboring tiles
+    to get the correct bitmap to blit
+    """
+
+    # use font instead of freetype so that bloxdrawing chars are better centered (no need to calculate center for each box tile)
+    fgcolor = (0, 150, 0)
+    block_sight = True
+    block_movement = True
+    block_shooting = True
+    char = "#"
+    #nesw_tile = "#"  # wall
+    #exploredpictures = {}
+    #fovpictures = {}
+    lookup = {
+        (True, False, True, False): "\u2551",  # vertical
+        (False, True, False, True): "\u2550",  # horizontal
+        (False, True, True, False): "\u2554",  # L east-south
+        (False, False, True, True): "\u2557",  # L south-west
+        (True, True, False, False): "\u255A",  # L north-east
+        (True, False, False, True): "\u255D",  # L north-west
+        (True, True, True, False): "\u2560",  # T without west
+        (True, False, True, True): "\u2563",  # T without east
+        (False, True, True, True): "\u2566",  # T without north
+        (True, True, False, True): "\u2569",  # T without south
+        (True, True, True, True): "\u256C",  # crossing
+        (False, False, False, False): "\u25A3",  # no neighbors
+        (False, False, True, False): "\u2565",  # terminate from south
+        (False, False, False, True): "\u2561",  # terminate from west
+        (False, True, False, False): "\u255E",  # terminate from east
+        (True, False, False, False): "\u2568",  # terminate from north
+    }
+
+
+    def create_pictures(self, list_of_neighbors, fontsize=48):
+        # list contains 8 neighbors, but only north, east, south, west are used for lookup
+        # check how many of them are Wall:
+        walls = [False, False, False, False]
+        #for i in (0,2,4,6):
+        #    try:
+        #        n = list_of_neighbors[i]
+        #    except IndexError:
+        #        continue
+        #    if isinstance(n, Wall):
+        #        walls[i//2] = True
+
+        walls = tuple([True if isinstance(e, Wall) else False for e in list_of_neighbors]) # convert list into tuple for better lookup
+        print(list_of_neighbors, "->", walls)
+        self.char = self.lookup[walls]
+        super().create_pictures(fontsize=Viewer.wallfontsize, mono=True)
+        #self.exploredpic = make_text(self.char, Viewer.explored_fgcolor)
+        #self.fovpicture = make_text(self.char, self.fgcolor)
+
+
 
 
 class Floor(Structure):
@@ -1291,16 +1423,14 @@ class Floor(Structure):
 
 class Oil(Structure):
     char = ":"
-    fgcolor = (87,71,31)  # brown
+    fgcolor = (87, 71, 31)  # brown
     block_sight = False
     block_movement = False
     block_shooting = False
 
-    def __init__(self, nesw=None):
-        super().__init__(nesw)
+    def __init__(self):
+        super().__init__()
         self.burning = False
-
-
 
 
 class Terminal(Structure):
@@ -1309,6 +1439,9 @@ class Terminal(Structure):
     block_sight = False
     block_movement = True
     block_shooting = False
+
+    def create_pictures(self, neighbors):
+        super().create_pictures(fontsize=Viewer.fontsize)
 
     def effect_download(self):
         Game.player.downloads += 1
@@ -1330,70 +1463,6 @@ class Terminal(Structure):
             )
 
 
-class Wall(Structure):
-    """walls have a specail char depending on neighboring walls
-    Viewer.load_images calls once Wall.create_pictures()
-    Wall.create_pictures fill the exploredpictures and fovpictures dicts with the correct bitmaps
-    When creating a wall instance, Game.create_dungeon checks nesw_tile and fills self.nesw with a tuple,
-    representing other wall neigbors north, east, sout or west of this instance. (For example: (True,False,False,False)
-    when the instance has one wall neighbor north of itself.
-    when Viewer.paint_tiles "paint" the Structure instances, it calls wallinstance.exploredpicture() or wallinstance.fovpicture()
-    to get the correct bitmap to blit
-    """
-
-    # use font instead of freetype so that bloxdrawing chars are better centered (no need to calculate center for each box tile)
-    fgcolor = (0, 150, 0)
-    block_sight = True
-    block_movement = True
-    block_shooting = True
-    nesw_tile = "#"  # wall
-    exploredpictures = {}
-    fovpictures = {}
-    lookup = {
-        (True, False, True, False): "\u2551",  # vertical
-        (False, True, False, True): "\u2550",  # horizontal
-        (False, True, True, False): "\u2554",  # L east-south
-        (False, False, True, True): "\u2557",  # L south-west
-        (True, True, False, False): "\u255A",  # L north-east
-        (True, False, False, True): "\u255D",  # L north-west
-        (True, True, True, False): "\u2560",  # T without west
-        (True, False, True, True): "\u2563",  # T without east
-        (False, True, True, True): "\u2566",  # T without north
-        (True, True, False, True): "\u2569",  # T without south
-        (True, True, True, True): "\u256C",  # crossing
-        (False, False, False, False): "\u25A3",  # no neighbors
-        (False, False, True, False): "\u2565",  # terminate from south
-        (False, False, False, True): "\u2561",  # terminate from west
-        (False, True, False, False): "\u255E",  # terminate from east
-        (True, False, False, False): "\u2568",  # terminate from north
-    }
-
-    @classmethod
-    def create_pictures(cls):
-        Wall.exploredpictures = {
-            k: make_text(
-                v, Viewer.explored_fgcolor, mono=True, fontsize=Viewer.wallfontsize
-            )
-            for k, v in Wall.lookup.items()
-        }
-        Wall.fovpictures = {
-            k: make_text(v, cls.fgcolor, mono=True, fontsize=Viewer.wallfontsize)
-            for k, v in Wall.lookup.items()
-        }
-
-    def __init__(self, nesw):
-        super().__init__(nesw)
-        self.char = Wall.lookup[self.nesw]
-
-    def exploredpicture(self):
-        """expecting self.nesw set by Game.create_dungeon"""
-        return Wall.exploredpictures[self.nesw]
-
-    def fovpicture(self):
-        """expecting self.nesw set by Game.create_dungeon"""
-        return Wall.fovpictures[self.nesw]
-
-
 class Door(Structure):
     """locked doors can be opened by keys.
     doors can be closed again by player, but not locked again.
@@ -1403,26 +1472,52 @@ class Door(Structure):
     fgcolor = (140, 100, 0)
     nesw_tile = "#"  # wall. a door can only be between walls
 
-    @classmethod
-    def create_pictures(cls):
-        cls.exploredpicture_closed_v = make_text("|", Viewer.explored_fgcolor)
-        cls.exploredpicture_closed_h = make_text("-", Viewer.explored_fgcolor)
-        cls.fovpicture_closed_v = make_text("|", cls.fgcolor)
-        cls.fovpicture_closed_h = make_text("-", cls.fgcolor)
-        cls.exploredpicture_open = make_text(".", Viewer.explored_fgcolor)
-        cls.fovpicture_open = make_text(".", cls.fgcolor)
 
-    def __init__(self, nesw):
-        super().__init__(nesw)
-        if nesw[0] and nesw[2]:  # wall north and south
-            self.char = "|"
-        elif nesw[1] and nesw[3]:  # wall east and west
-            self.char = "-"
+
+    def __init__(self):
+        super().__init__()
+        #if nesw[0] and nesw[2]:  # wall north and south
+        #    self.char = "|"
+        #elif nesw[1] and nesw[3]:  # wall east and west
+        #    self.char = "-"
         self.closed = True
         self.block_sight = True
         self.block_movement = True
         self.block_shooting = True  # set false for grille door etc.
         self.locked = True  # key is needed to open
+        self.vertical = False
+        self.horizontal = False
+
+
+    def create_pictures(self, list_of_neighbors):
+        #self.list_of_neighbors = list_of_neighbors
+        # doors can be vertical or horizontal, depending on neighboring tiles
+        # only nesw neigbors are used for calculation
+        # assumes that a door has either north-south walls / doors or east / west
+        # assumes that a door is not a corner door -> no diagonal movement
+        walls_or_doors = [False, False, False, False]
+        for i in (0, 1, 2, 3):
+            if list_of_neighbors[i] is None:
+                continue
+            if isinstance(list_of_neighbors[i], Wall) or isinstance(list_of_neighbors[i], Door):
+                    walls_or_doors[i] = True
+        if walls_or_doors[0] and walls_or_doors[2]:
+            self.vertical = True # north and south neighbor is wall/ other door
+        elif walls_or_doors[1] and walls_or_doors[3]:
+            self.horizontal = True # west and east neighbor is wall / other door
+        elif walls_or_doors[0] or walls_or_doors[2]:
+            self.vertical = True
+        elif walls_or_doors[1] or walls_or_doors[3]:
+            self.horizontal = True
+        else:
+            raise ValueError("strange position of Door", list_of_neighbors)
+        if self.horizontal:
+            self.char = "-"
+        elif self.vertical:
+            self.char = "|"
+        super().create_pictures(fontsize=Viewer.fontsize)
+
+
 
     def open(self):
         self.closed = False
@@ -1431,33 +1526,24 @@ class Door(Structure):
         self.block_movement = False
         self.block_shooting = False
         self.locked = False
+        super().create_pictures(fontsize=Viewer.fontsize)
 
     def close(self):
-        if self.nesw[0] and self.nesw[2]:  # wall north and south
-            self.char = "|"
-        elif self.nesw[1] and self.nesw[3]:  # wall east and west
-            self.char = "-"
+        #if self.nesw[0] and self.nesw[2]:  # wall north and south
+        #    self.char = "|"
+        #elif self.nesw[1] and self.nesw[3]:  # wall east and west
+        #    self.char = "-"
         self.closed = True
         self.locked = False  # key is not needed again
         self.block_sight = True
         self.block_movement = True
         self.block_shooting = True  # set false for grille door etc.
+        if self.horizontal:
+            self.char = "-"
+        elif self.vertical:
+            self.char = "|"
+        super().create_pictures(fontsize=Viewer.fontsize)
 
-    def exploredpicture(self):
-        if self.closed:
-            if self.char == "|":
-                return Door.exploredpicture_closed_v
-            if self.char == "-":
-                return Door.exploredpicture_closed_h
-        return Door.exploredpicture_open
-
-    def fovpicture(self):
-        if self.closed:
-            if self.char == "|":
-                return Door.fovpicture_closed_v
-            if self.char == "-":
-                return Door.fovpicture_closed_h
-        return Door.fovpicture_open
 
 
 class Glass(Structure):
@@ -1465,52 +1551,60 @@ class Glass(Structure):
 
     # USE font instead of freetype so that doors get not expanded (ugly)
     fgcolor = (200, 255, 250)  # cyan-white
-    nesw_tile = "#"  # wall neighbor tile
+    #nesw_tile = "#"  # wall neighbor tile
     block_sight = False
     block_movement = True
     block_shooting = True  # set false for grille door etc.
 
-    @classmethod
-    def create_pictures(cls):
-        cls.exploredpicture_v = make_text("|", Viewer.explored_fgcolor)
-        cls.exploredpicture_h = make_text("-", Viewer.explored_fgcolor)
-        cls.exploredpicture_cross = make_text("+", Viewer.explored_fgcolor)
-        cls.fovpicture_v = make_text("|", cls.fgcolor)
-        cls.fovpicture_h = make_text("-", cls.fgcolor)
-        cls.fovpicture_cross = make_text("+", cls.fgcolor)
 
-    def __init__(self, nesw):
-        super().__init__(nesw)
+
+    def __init__(self):
+        super().__init__()
         # calculate orintation of glass wall depending on north-east-south-west wall neighbors
-        if nesw[0] and nesw[2]:  # wall north and south
-            self.char = "|"
-        elif nesw[1] and nesw[3]:  # wall east and west
-            self.char = "-"
-        elif nesw[0] or nesw[2]:  # wall north or south
-            self.char = "|"
-        elif nesw[1] or nesw[3]:  # wall east or west
-            self.char = "-"
-        else:
-            self.char = "+"  # strange neighbors
+        #if nesw[0] and nesw[2]:  # wall north and south
+        #    self.char = "\u2502" #"|" # vertical
+        #elif nesw[1] and nesw[3]:  # wall east and west
+        #    self.char = "\u2500"  # horizontal
+        #elif nesw[0] or nesw[2]:  # wall north or south
+        #    self.char = "\u2502" #w"|"  # vertical
+        #elif nesw[1] or nesw[3]:  # wall east or west
+        #    self.char = "\u2500" # horizontal
+        #else:
+        #    self.char = "+"  # strange neighbors
         # self.closed = True
+        self.vertical = False
+        self.horizontal = False
 
-    def exploredpicture(self):
+    def create_pictures(self, list_of_neighbors):
+        # only nesw neighbors are used for orientation of glass
+        walls = [False, False, False, False]
+        for i in (0, 1, 2, 3):
+            if list_of_neighbors[i] is None:
+                continue
+            for stru in [Wall, Door, Glass]:
+                if isinstance(list_of_neighbors[i], stru):
+                        walls[i] = True
 
-        if self.char == "|":
-            return self.exploredpicture_v
-        elif self.char == "-":
-            return self.exploredpicture_h
-        else:  # if self.char == "+":
-            return self.exploredpicture_cross
 
-    def fovpicture(self):
-        if self.char == "|":
-            return self.fovpicture_v
-        elif self.char == "-":
-            return self.fovpicture_h
+        if walls[0] and walls[2]:
+            self.vertical = True  # north and south neighbor is wall/ other door
+            self.char = "|"
+        elif walls[1] and walls[3]:
+            self.horizontal = True  # west and east neighbor is wall / other door
+            self.char="-"
         else:
-            # if self.char == "+":
-            return self.fovpicture_cross
+            self.char = "+"
+        super().create_pictures(fontsize=Viewer.fontsize)
+
+    #@classmethod
+    #def create_pictures(cls):
+    #    cls.exploredpicture_v = make_text("\u2502", Viewer.explored_fgcolor, font=Viewer.font)
+    #    cls.exploredpicture_h = make_text("\u2500", Viewer.explored_fgcolor, font=Viewer.font)
+    #    cls.exploredpicture_cross = make_text("+", Viewer.explored_fgcolor, font=Viewer.font)
+    #    cls.fovpicture_v = make_text("\u2502", cls.fgcolor, font=Viewer.font)
+    #    cls.fovpicture_h = make_text("\u2500", cls.fgcolor, font=Viewer.font)
+    #    cls.fovpicture_cross = make_text("+", cls.fgcolor, font=Viewer.font)
+
 
 
 class StairDown(Structure):
@@ -1691,11 +1785,17 @@ class Monster:
     pictures = []
     fgcolor = (255, 0, 0)  # red
     char = "\U0001F620"  # angry blob  "\U0001F608"  # angry emoticon
+    ai_dx = (0,0,0,1,-1)
+    ai_dy = (0,0,0,1,-1)
 
     @classmethod
     def create_pictures(cls):
         pic = make_text(cls.char, cls.fgcolor, font=Viewer.font2)
         cls.pictures.append(pic)
+
+    @classmethod
+    def ai(cls):
+        return random.choice(cls.ai_dx), random.choice(cls.ai_dy)
 
     def __init__(self, x, y, z):
         self.number = Game.monsternumber  # get unique monsternumber
@@ -1709,27 +1809,6 @@ class Monster:
         self.friendly = False  # friendly towards player?
         # self.char = "M"  # Monster
 
-    def ai(self):
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        return dx, dy
-
     def fovpicture(self):
         # print("returning fovpicture of", self.__class__.__name__)
         return self.pictures[0]
@@ -1740,13 +1819,18 @@ class Snake(Monster):
     pictures = []
     fgcolor = (23, 255, 0)  # light green
     char = "\U0001F40D"  # snake "#"\u046E"
+    ai_dx = (0,1,-1)
+    ai_dy = (0,1,-1)
 
 
-class Dragon(Monster):
+class FireDragon(Monster):
 
     pictures = []
     fgcolor = (255, 90, 0)  # orange
     char = "\U0001F409"
+    p_shoot = 0.2 # probabiltiy to shoot at player
+    p_hunt = 0.8  # probability to move towards player
+
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1755,38 +1839,26 @@ class Dragon(Monster):
 
     def ai(self):
         # ---fire spitting---
-        if Game.dungeon[self.z][self.y][self.x]:  # visible?
-            if random.random() < 0.2:
-                can_shoot = calculate_line(
+        if Game.dungeon[self.z][self.y][self.x].fov:  # visible?
+            #print("FireDragon spitting...")
+            if random.random() < self.p_shoot:
+                #print("Fire spit!...")
+                # spit fire if line-of-shight for shooting is True (can shoot)
+                if calculate_line(
                     (self.x, self.y),
                     (Game.player.x, Game.player.y),
                     Game.player.z,
                     modus="shoot",
-                )
-                if can_shoot:
+                ):
                     # print("feuerspucke")
                     points = get_line((self.x, self.y), (Game.player.x, Game.player.y))
                     for f in points[:6]:
                         Fire(f[0], f[1], max_age=1)
+        #else:
+            #print("firedragon not in fov")
 
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
+        dx = random.choice(( 0, 0, 0, 1, -1, ))
+        dy = random.choice(( 0, 0, 0, 1, -1, ))
         return dx, dy
 
 
@@ -1801,7 +1873,7 @@ class SkyDragon(Monster):
         self.hp = 50
         self.friendly = False  # friendly towards player?
 
-    def ai(self):
+    def oldai(self):
         # ---fire spitting---
         if Game.dungeon[self.z][self.y][self.x]:  # visible?
             if random.random() < 0.1:
@@ -1817,28 +1889,12 @@ class SkyDragon(Monster):
                     for f in points[:10]:
                         Flash(f[0], f[1], max_age=1)
 
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
+        dx = random.choice(( 0, 0, 0, 1, -1, ))
+        dy = random.choice(( 0, 0, 0, 1, -1, ))
         return dx, dy
 
 
-class Waterguy(Monster):
+class WaterDragon(Monster):
 
     pictures = []
     fgcolor = (0, 0, 255)  # blue
@@ -1849,7 +1905,7 @@ class Waterguy(Monster):
         self.hp = 25
         self.friendly = False  # friendly towards player?
 
-    def ai(self):
+    def oldai(self):
         # ---water spitting---
         if Game.dungeon[self.z][self.y][self.x]:  # visible?
             if random.random() < 0.5:
@@ -1865,30 +1921,8 @@ class Waterguy(Monster):
                     for f in points[:6]:
                         Water(f[0], f[1], max_age=3)
 
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
+        dx = random.choice(( 0, 0, 0, 1, -1, ))
+        dy = random.choice(( 0, 0, 0, 1, -1, ))
         return dx, dy
 
 
@@ -2046,8 +2080,8 @@ class Viewer:
         Viewer.images["food"] = pygame.transform.scale(tmp, (35, 35))
 
         # image for structure tiles ( wall ) -> iterate over all subclasses of Structure and call cls.create_pictures()
-        for sc in Structure.__subclasses__():
-            sc.create_pictures()
+        #for sc in Structure.__subclasses__():
+        #    sc.create_pictures()
         # image creation for Effects:
         # print("creating effect pictures..")
         for sc in Effect.__subclasses__():
@@ -2339,7 +2373,7 @@ class Viewer:
                             exploredbg,
                             (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                         )  # fill with exploredbackgroundcolor
-                        pic = tile.exploredpicture()
+                        pic = tile.exploredpic
                         if pic is not None:
                             self.screen.blit(pic, (x, y))  # blit from topleft corner
                     else:  # invisible, black on black
@@ -2358,7 +2392,8 @@ class Viewer:
                         (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                     )
                     # ------- structure --------
-                    pic = tile.fovpicture()
+                    pic = tile.fovpic
+                    ##print("structure:", tile, " pic=", pic, x, y)
                     if pic is not None:
                         self.screen.blit(pic, (x, y))  # blit from topleft corner
                     # ------------- items (without traps) ----------
@@ -2665,7 +2700,7 @@ class Viewer:
                             or event.key == pygame.K_KP_ENTER
                         ):
                             selection = self.pixel_to_tile(pygame.mouse.get_pos())
-                            print("selected: ", selection)
+                            #print("selected: ", selection)
                             self.cursormode = False
                     else:
                         # -------------- not in cursormode --------------
@@ -2754,7 +2789,7 @@ class Viewer:
             left, middle, right = pygame.mouse.get_pressed()
             if not oldleft and left and self.cursormode:
                 selection = self.pixel_to_tile(pygame.mouse.get_pos())
-                print("selected: ", selection)
+                #print("selected: ", selection)
                 self.cursormode = False
 
             oldleft, oldmiddle, oldright = left, middle, right
@@ -3005,7 +3040,7 @@ def calculate_line(start, end, z, modus="all"):
                     "shoot" -> returns bool
                     "move"  -> returns bool
     """
-    print("calculating line in dungeon", z, "from", start, "to", end, "for", modus)
+    #print("calculating line in dungeon", z, "from", start, "to", end, "for", modus)
     points = get_line(start, end)
     # create copy
     sight_ok = True
@@ -3297,8 +3332,8 @@ legend = {
     "g": Glass,
     "@": Player,
     "M": Monster,
-    "D": Dragon,
-    "W": Waterguy,
+    "F": FireDragon,
+    "W": WaterDragon,
     "S": SkyDragon,
     "k": Key,
     "$": Coin,
@@ -3316,24 +3351,24 @@ level1 = """
 #.$$.M....gß.#.#...#...ff..#...$.....#
 ######################################"""
 
-# insert in level2: W for Waterguy, S for Skydragon
+# insert in level2: W for WaterDragon, S for Skydragon
 
 level2 = """
 #################################################################
 #..<............................................................#
-#>..............................................................#
+#>...........kkkk...............................................#
 #...............................................................#
 #..................................................:::::::::::::#
 #...............##d#####......:::::::...............::::::::::::#
-#...............#......#......:::::::..............:::::::::::::#
-#...............#..D.. d......:::::::..............:::::::::::::#
+#...............#.W....#......:::::::..............:::::::::::::#
+#...............#..S...d......:::::::..............:::::::::::::#
 #...............#......#......:::::::...........................#
-#...............#.D  ..d........................................#
-#.kk.k.k........d..D...##.......................................#
-#...............###d#####.......................................#
-#..WS...........................................................#
-#...............................................................#
-#...............................................................#
+#...............#.F....d........................................#
+#.kk.k.k........d..F...#........................................#
+#...............###d####........................................#
+#......................................::::::::::::::::.........#
+#......................................::::::::::::::::.........#
+#......................................::::::::::::::::.........#
 #################################################################"""
 
 level3 = """
