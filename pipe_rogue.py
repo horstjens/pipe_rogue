@@ -33,6 +33,7 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: arrow should end flying BEFORE monster start moving away
 # TODO: better (longer) chars / glyphs for glass window, door
 # TODO: better code for FireDragon ( hunt/flee ), keep distance, reload...
 # TODO: Flames / Water becoming smaller and smaller before disappearing
@@ -1915,9 +1916,30 @@ class Player(Monster):
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
+        self.mana = 100
+        self.mana_regenaration = 0.1
         self.friendly = True
         self.downloads = 0
+        self.shield = False
         # self.backpack = [] # container for transported items
+
+    def toggle_shield(self):
+        if self.shield:   # turn shield off
+            self.shield = False
+            Flytext(tx=self.x, ty=self.y,
+                    text="shield deactivated")
+            return
+        # turn shield on if enoug mana
+        if self.mana <= 15:
+            Flytext(tx=self.x, ty=self.y,
+                    text="not enough mana!")
+            return
+        # activate shield
+        self.mana -= 15
+        self.shield = True
+        Flytext(tx=self.x, ty=self.y,
+                text="shield activated!")
+
 
 
 class Viewer:
@@ -2251,6 +2273,14 @@ class Viewer:
             230,
             font_size=32,
         )
+        self.panelscreen.blit(
+            make_text("\U0001F344",
+                      fgcolor=(0,0,255),
+                      size=(32,32),
+                      fontsize=32),
+            (73, 220))
+        write(self.panelscreen, "{:>3}".format(Game.player.mana),
+              130, 240, font_size=32)
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -2416,6 +2446,11 @@ class Viewer:
                     # monstercounter = len(monsters)
                     for m in monsters:
                         self.screen.blit(m.fovpicture(), (x, y))
+                        if isinstance(m, Player):
+                            if m.shield:
+                                self.screen.blit(make_text("\U0001F344",
+                                        fgcolor=(0,0,255), alpha=128),
+                                                 (x,y))
 
                     # ------------- effects --------------
                     for e in [
@@ -2725,6 +2760,9 @@ class Viewer:
                         ):
                             self.loglines.extend(self.g.turn(0, 0))
                             repaint = True
+                        if event.key == pygame.K_p:
+                            Game.player.toggle_shield()
+
                         if event.key == pygame.K_c and len(self.flytextgroup) == 0:
                             # close door
                             self.loglines.extend(self.g.close_door())
@@ -3344,11 +3382,11 @@ level2 = """
 #...............#..S...d......:::::::..............:::::::::::::#
 #...............g......g......:::::::...........................#
 #...............#.F....d........................................#
-#.kk.k.k........d..F...#........................................#
+#.kk.k.k........d..F...#...............................kk.......#
 #...............###d#g##........................................#
-#......................................::::::::::::::::.........#
-#......................................::::::::::::::::.........#
-#......................................::::::::::::::::.........#
+#......................................::::::::::::::::...###d###
+#......................................::::::::::::::::...d.FFF.#
+#......................................::::::::::::::::...#.FFF.#
 #################################################################"""
 
 level3 = """
