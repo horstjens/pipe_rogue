@@ -1395,9 +1395,11 @@ class Terminal(Structure):
         super().create_pictures(fontsize=Viewer.fontsize)
 
     def effect_download(self):
-        Game.player.downloads += 1
+        #Game.player.downloads += 1
+        d = Download(Game.player.x, Game.player.y, Game.player.z)
+        d.backpack = True
         zerostring = list("010101010101010101010")
-        for t in range(0, -25, -1):
+        for t in range(0, -12, -1):
             random.shuffle(zerostring)
             Flytext(
                 tx=Game.player.x,
@@ -1638,6 +1640,10 @@ class Key(Item):
     fgcolor = (255, 255, 0)
     char = "\U0001F511"  # key #"k"
 
+class Download(Item):
+    pictures = []
+    fgcolor = (0, 128, 0)
+    char = "\U0001F4BE"  # diskette
 
 class Trap(Item):
     pictures = []
@@ -1709,7 +1715,7 @@ class Trap(Item):
 class Food(Item):
 
     pictures = []
-    char = "\u2615"
+    char = "\U0001F35C" # steam soup   # coffe cup:"\u2615"
     fgcolor = (200, 0, 200)
 
     def __init__(self, x, y, z):
@@ -1722,8 +1728,32 @@ class Food(Item):
 
 
 class Buff:
+    """stat-changing (de)buff that apply to Player or Monster"""
     pictures = []
     fgcolor = (0, 200, 0)
+    number = 0
+
+    def __init__(self, monsternumber, age=0, max_age=None, mana_cost=None, mana_upkeep=None):
+        self.number = Buff.number  # unique number
+        self.monsternumber = monsternumber
+        Buff.number += 1
+        self.age = age
+        self.max_age = max_age
+        self.mana_cost = mana_cost
+        self.mana_upkeep = mana_upkeep
+        Game.zoo[self.monsternumber].buffs.append(self)
+        self.active = True
+
+    def update(self):
+        """check if buff cancel itself by lack of mana / or reaching max_age"""
+        # check if monster is still in zoo? not necessary?
+        # ----- aging ----
+        self.age += 1
+        if self.max_age is not None and self.age > self.max_age:
+            self.active = False
+        if self.mana_upkeep is not None and self.mana_upkeep > Game.zoo[self.monsternumber].mana:
+            self.active = False
+
 
 
 class Monster:
@@ -1932,12 +1962,20 @@ class Player(Monster):
     fgcolor = (0, 0, 255)
     shield_upkeep = 1  # 1 mana per turn
     mana_regeneration = 0.1
+    stamina_regeneration = 0.25
     shield_cost = 15  # mana cost to activate shield
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
+        self.hp_full = 50
         self.mana = 100
+        self.mana_full = 100
+        self.stamina = 100
+        self.stamina_full = 100
+        self.level = 1
+        self.xp = 0
+        self.xp_full = 100
         # self.mana_regeneration = 0.1
         self.friendly = True
         self.downloads = 0
@@ -1984,7 +2022,7 @@ class Viewer:
     allgroup = None  # pygame sprite Group for all sprites
     explored_fgcolor = (0, 100, 0)
     explored_bgcolor = (10, 10, 10)
-    panelcolor = (200, 200, 0)
+    panelcolor = (128, 128, 64)
     toplefttile = [
         0,
         0,
@@ -2033,8 +2071,8 @@ class Viewer:
         fontfile2 = os.path.join("data", "fonts", "NotoEmoji-Regular.ttf")
         # fontfile = os.path.join("data", "fonts", "NotoEmoji-Regular.ttf")
         Viewer.monofontfilename = os.path.join("data", "fonts", "FreeMonoBold.otf")
-        Viewer.font = pygame.freetype.Font(fontfile)
-        Viewer.font2 = pygame.freetype.Font(fontfile2)
+        Viewer.font = pygame.freetype.Font(fontfile) # Symbola605
+        Viewer.font2 = pygame.freetype.Font(fontfile2) # NotoEmoji-Regular
         # Viewer.monofont = pygame.freetype.Font(monofontfile)
         # Viewer.monofont = pygame.font.Font(monofontfile)
 
@@ -2234,15 +2272,7 @@ class Viewer:
         # in topright corner of screen is the radarscreen: panelwidth  x panelwidth
         # the height of panelscreen is therefore Viewer.height - panelwidth
         self.panelscreen.fill(Viewer.panelcolor)
-        write(
-            background=self.panelscreen,
-            text="panel \u2566\u2569",
-            x=5,
-            y=5,
-            color=(0, 0, 255),
-            font_size=32,
-            origin="topleft",
-        )
+        write(self.panelscreen,"panel \u2566\u2569",5,0,color=(0, 0, 255),font_size=32, origin="topleft")
         z = Game.player.z
         tiles_x = len(Game.dungeon[z][0])  # z y x
         tiles_y = len(Game.dungeon[z])
@@ -2256,63 +2286,69 @@ class Viewer:
         food = len(
             [i for i in Game.items.values() if isinstance(i, Food) and i.backpack]
         )
-        text = "{}   :{}    :{}".format(keys, gold, food)
-        write(
-            background=self.panelscreen,
-            text=f"{Game.turn_number}: x:{Game.player.x} y:{Game.player.y} z:{z + 1} {tiles_x}x{tiles_y} ",
-            x=5,
-            y=150,
-            font_size=20,
+        downloads = len(
+            [i for i in Game.items.values() if isinstance(i, Download) and i.backpack]
         )
-        # ----- hp
-        write(
-            background=self.panelscreen,
-            text="\u2665",
-            x=0,
-            y=165,
-            color=(255, 0, 0),
-            font_size=40,
-        )  # red heart
-        write(
-            self.panelscreen, "{:>3}".format(Game.player.hp), 25, 170, font_size=32
-        )  # hp text
-        # ---- gold
-        self.panelscreen.blit(Viewer.images["gold"], (90, 170))  # gold chest
-        write(
-            self.panelscreen, "{:>3}".format(gold), 130, 170, font_size=32
-        )  # gold text
-        # ---- keys
-        self.panelscreen.blit(Viewer.images["key"], (-5, 200))
-        write(
-            self.panelscreen, "{:>3}".format(keys), 25, 200, font_size=32
-        )  # gold text
-        # --- food
-        self.panelscreen.blit(Viewer.images["food"], (90, 200))
-        # write(self.panelscreen, "\u2615", 90, 200, color=(255,0,255), font_size=32) # unicode sign for coffe
-        write(
-            self.panelscreen, "{:>3}".format(food), 130, 200, font_size=32
-        )  # gold text
-        # ---- downloads ---- : disk icon
-        self.panelscreen.blit(make_text("\U0001F4BE", fontsize=32), (-15, 220))
-        write(
-            self.panelscreen,
-            "{:>3}".format(Game.player.downloads),
-            25,
-            230,
-            font_size=32,
-        )
-        # ----------------mana--------------
-        self.panelscreen.blit(
-            make_text("\U0001F344", fgcolor=(0, 0, 255), size=(32, 32), fontsize=32),
-            (73, 220),
-        )
-        write(
-            self.panelscreen,
-            "{:>3.1f}".format(Game.player.mana),
-            130,
-            240,
-            font_size=32,
-        )
+        #text = "{}   :{}    :{}".format(keys, gold, food)
+        # --------- x,y,z,-------------
+        text = f"turn {Game.turn_number} x:{Game.player.x} y:{Game.player.y} z:{z + 1} {tiles_x}x{tiles_y} "
+        write(self.panelscreen,text,5,35,font_size=15)
+        pygame.draw.line(self.panelscreen, (0,0,255), (0,50),(Viewer.panelwidth,50),1)
+        # ---------- status bars -------------
+        # ----- red hp bar  ---------------------
+        y = 55
+        #write(self.panelscreen, "\u2665",5,170, color=(255, 0, 0),font_size=25, font=Viewer.font2)
+        #write(self.panelscreen, "{:>3}".format(Game.player.hp), 25, 170, font_size=25, )
+        pixelwidth = int(Game.player.hp / Game.player.hp_full * Viewer.panelwidth)
+        pygame.draw.rect(self.panelscreen, Viewer.panelcolor, (0,y,Viewer.panelwidth, 25))
+        pygame.draw.rect(self.panelscreen, (222,0,0), (0, y, Viewer.panelwidth, 25),2)
+        pygame.draw.rect(self.panelscreen, (222,0,0), (0, y, pixelwidth, 25))
+        write(self.panelscreen, f"hp: {Game.player.hp} / {Game.player.hp_full}", 5,y+2,font_size=20, color=(255,255,255))
+        # ------ blue mana bar --------------
+        y = 80
+        pixelwidth = int(Game.player.mana / Game.player.mana_full * Viewer.panelwidth)
+        pygame.draw.rect(self.panelscreen, Viewer.panelcolor, (0, y, Viewer.panelwidth, 25))
+        pygame.draw.rect(self.panelscreen, (0, 0, 222), (0, y, Viewer.panelwidth, 25), 2)
+        pygame.draw.rect(self.panelscreen, (0, 0, 222), (0, y, pixelwidth, 25))
+        text = "mana: {} / {}".format(int(Game.player.mana), int(Game.player.mana_full))
+        write(self.panelscreen, text, 5, y+2, font_size=20, color=(255,255,255))
+        # ----- yellow samina bar --------
+        y = 105
+        pixelwidth = int(Game.player.stamina / Game.player.stamina_full * Viewer.panelwidth)
+        pygame.draw.rect(self.panelscreen, Viewer.panelcolor, (0, y, Viewer.panelwidth, 25))
+        pygame.draw.rect(self.panelscreen, (222, 222, 0), (0, y, Viewer.panelwidth, 25), 2)
+        pygame.draw.rect(self.panelscreen, (222, 222, 0), (0, y, pixelwidth, 25))
+        text = "stamina: {} / {}".format(int(Game.player.stamina), int(Game.player.stamina_full))
+        write(self.panelscreen, text, 5, y+2, font_size=20, color=(0, 0, 0))
+        # --------white xp bar
+        y = 130
+        pixelwidth = int(Game.player.xp / Game.player.xp_full * Viewer.panelwidth)
+        pygame.draw.rect(self.panelscreen, Viewer.panelcolor, (0, y, Viewer.panelwidth, 25))
+        pygame.draw.rect(self.panelscreen, (255, 255, 255), (0, y, Viewer.panelwidth, 25), 2)
+        pygame.draw.rect(self.panelscreen, (255, 255, 255), (0, y, pixelwidth, 25))
+        text = "lvl: {} xp: {} / {}".format(Game.player.level, Game.player.xp, Game.player.xp_full)
+        write(self.panelscreen, text, 5, y + 2, font_size=20, color=(0, 0, 0))
+
+
+        # ---------------------quick inventory -----------------
+        # ---- key, keys ---------------------------------
+        # self.panelscreen.blit(Viewer.images["key"], (-5, 200))
+        write(self.panelscreen, "\U0001F511", 5, 170, font_size=25, font=Viewer.font2)
+        write(self.panelscreen, "{:>3}".format(keys), 25, 170, font_size=25, )
+        # ---- gold chest, gold -----------------
+        #self.panelscreen.blit(Viewer.images["gold"], (90, 170))  # gold chest
+        write(self.panelscreen, "\U0001F4B0", 90,170, font_size=25, font=Viewer.font2)
+        write(self.panelscreen, "{:>3}".format(gold), 130, 170, font_size=25, )
+        # --------------disk icon, downloads ----------------
+        # self.panelscreen.blit(make_text("\U0001F4BE", fontsize=32), (-15, 220))
+        write(self.panelscreen, "\U0001F4BE", 5, 200, font_size=25, color=(0, 64, 0), font=Viewer.font2)
+        write(self.panelscreen, "{:>3}".format(downloads), 25, 200, font_size=25, )
+        # --- food symbol, food ---------------------------
+        #self.panelscreen.blit(Viewer.images["food"], (90, 200))
+        write(self.panelscreen, "\U0001F35C", 90, 200, color=(255,0,255), font_size=25 , font=Viewer.font2)
+        write(self.panelscreen, "{:>3}".format(food), 130, 200, font_size=25, )
+
+
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -3338,6 +3374,7 @@ def write(
     y=150,
     color=(0, 0, 0),
     font_size=None,
+    font=None,
     origin="topleft",
     mono=False,
     rotation=0,
@@ -3351,6 +3388,7 @@ def write(
     :param int y:  y-postiont of text (see origin)
     :param (int, int, int) color: text color
     :param int font_size: size of font
+    :param font: font object
     :param str origin: can be one of those values: 'center', 'centercenter', 'topleft', 'topcenter', 'topright', 'centerleft', 'centerright',
     'bottomleft', 'bottomcenter', 'bottomright'
     :param bool mono: DOES NOT WORK ! if True, use Viewer.monofont instead of Viewer.font
@@ -3359,12 +3397,15 @@ def write(
     """
     if font_size is None:
         font_size = 24
-    # font = Viewer.font # pygame.font.SysFont(font_name, font_size, bold)
+    #
+    if font is None:
+        font = Viewer.font # pygame.font.SysFont(font_name, font_size, bold)
 
     if mono:
         font = Viewer.monofont
-    else:
-        font = Viewer.font
+
+    #else:
+    #    font = Viewer.font
     surface, rrect = font.render(
         text, color, rotation=rotation, size=font_size, style=style
     )
