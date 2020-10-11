@@ -2125,27 +2125,27 @@ class Viewer:
         )  # arrow
         Viewer.images["arrow"] = pygame.transform.scale(tmp, (35, 8))
 
-        tmp = pygame.Surface.subsurface(
-            Viewer.images["main"], (22, 840, 16, 16)
-        )  # flame1
-        Viewer.images["flame1"] = pygame.transform.scale(tmp, (32, 32))
-        tmp = pygame.Surface.subsurface(
-            Viewer.images["main"], (40, 840, 16, 16)
-        )  # flame2
-        Viewer.images["flame2"] = pygame.transform.scale(tmp, (32, 32))
-        tmp = pygame.Surface.subsurface(
-            Viewer.images["main"], (56, 840, 16, 16)
-        )  # flame3
-        Viewer.images["flame3"] = pygame.transform.scale(tmp, (32, 32))
+        #tmp = pygame.Surface.subsurface(
+        #    Viewer.images["main"], (22, 840, 16, 16)
+        #)  # flame1
+        #Viewer.images["flame1"] = pygame.transform.scale(tmp, (32, 32))
+        #tmp = pygame.Surface.subsurface(
+        #    Viewer.images["main"], (40, 840, 16, 16)
+        #)  # flame2
+        #Viewer.images["flame2"] = pygame.transform.scale(tmp, (32, 32))
+        #tmp = pygame.Surface.subsurface(
+        #    Viewer.images["main"], (56, 840, 16, 16)
+        #)  # flame3
+        #Viewer.images["flame3"] = pygame.transform.scale(tmp, (32, 32))
         # ---- direct images ---
-        tmp = pygame.image.load(os.path.join("data", "goldchest.png")).convert_alpha()
-        Viewer.images["gold"] = pygame.transform.scale(tmp, (35, 35))
+        #tmp = pygame.image.load(os.path.join("data", "goldchest.png")).convert_alpha()
+        #Viewer.images["gold"] = pygame.transform.scale(tmp, (35, 35))
 
-        tmp = pygame.image.load(os.path.join("data", "old_key.png")).convert_alpha()
-        Viewer.images["key"] = pygame.transform.scale(tmp, (35, 35))
+        #tmp = pygame.image.load(os.path.join("data", "old_key.png")).convert_alpha()
+        #Viewer.images["key"] = pygame.transform.scale(tmp, (35, 35))
 
-        tmp = pygame.image.load(os.path.join("data", "food1.png")).convert_alpha()
-        Viewer.images["food"] = pygame.transform.scale(tmp, (35, 35))
+        #tmp = pygame.image.load(os.path.join("data", "food1.png")).convert_alpha()
+        #Viewer.images["food"] = pygame.transform.scale(tmp, (35, 35))
 
         # image for structure tiles ( wall ) -> iterate over all subclasses of Structure and call cls.create_pictures()
         # for sc in Structure.__subclasses__():
