@@ -542,7 +542,7 @@ class FlyingObject(VectorSprite):
     except arguments: start_tile, end_tile"""
 
     def _overwrite_parameters(self):
-        #self.picture = image #Viewer.images["arrow"]
+        # self.picture = image #Viewer.images["arrow"]
         print("arrow from", self.start_tile, "to", self.end_tile)
         self.pos = Viewer.tile_to_pixel(self.start_tile)
         if self.max_age is None:
@@ -2074,7 +2074,9 @@ class Player(Monster):
                     # Bubble(pos=p, age=-0.5)
         # ----- fly arrow from player to point! because flight-path may be blocked
         if point != points[1]:
-            FlyingObject(start_tile=points[0], end_tile=point, picture=Arrow.pictures[0])
+            FlyingObject(
+                start_tile=points[0], end_tile=point, picture=Arrow.pictures[0]
+            )
             # ---- destroy arrow ----
             del Game.items[arrows[0].number]
 
@@ -2210,15 +2212,22 @@ class Viewer:
         Viewer.images["bow"] = pygame.image.load(
             os.path.join("data", "skill_bow.png")
         ).convert_alpha()
-        Viewer.images["bow"] = pygame.transform.scale(Viewer.images["bow"], Viewer.gridsize)
+        Viewer.images["bow"] = pygame.transform.scale(
+            Viewer.images["bow"], Viewer.gridsize
+        )
         Viewer.images["bow_no"] = Viewer.images["bow"].copy()
-        pygame.draw.line(Viewer.images["bow_no"], (255,0,0), (0,0), Viewer.gridsize, 5)
+        pygame.draw.line(
+            Viewer.images["bow_no"], (255, 0, 0), (0, 0), Viewer.gridsize, 5
+        )
+        pygame.draw.line(
+            Viewer.images["bow_no"], (255,0,0), (Viewer.gridsize[0],0),()
+        )
 
         # --- sub-images from main.png:
-        #tmp = pygame.Surface.subsurface(
+        # tmp = pygame.Surface.subsurface(
         #    Viewer.images["main"], (808, 224, 22, 7)
-        #)  # arrow
-        #Viewer.images["arrow"] = pygame.transform.scale(tmp, (35, 8))
+        # )  # arrow
+        # Viewer.images["arrow"] = pygame.transform.scale(tmp, (35, 8))
 
         # tmp = pygame.Surface.subsurface(
         #    Viewer.images["main"], (22, 840, 16, 16)
@@ -2927,11 +2936,7 @@ class Viewer:
             pygame.display.set_caption(fps_text)
             repaint = False
             # or len(self.flytextgroup) > 0
-            if (
-                self.cursormode
-                or len(self.flygroup) > 0
-                or len(self.fxgroup)
-            ):
+            if self.cursormode or len(self.flygroup) > 0 or len(self.fxgroup):
                 repaint = True
             if dungeon_has_changed:
                 ## kill old sprites of effects:
@@ -2944,7 +2949,9 @@ class Viewer:
                 self.make_panel()
                 self.make_log()
                 ##pygame.display.flip() # bad idea
-                self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth, 0))
+                self.screen.blit(
+                    self.radarscreen, (Viewer.width - Viewer.panelwidth, 0)
+                )
                 self.screen.blit(self.logscreen, (0, Viewer.height - Viewer.logheight))
                 self.screen_backup = self.screen.copy()
                 # testing...
@@ -3023,12 +3030,11 @@ class Viewer:
         )
         # Flytext(text="press h for help", age=-2)
         # self.screen_backup = self.screen.copy()
-        #self.repaint_screen(True, True) # force painting of screen
+        # self.repaint_screen(True, True) # force painting of screen
         while running:
             dx, dy, dz = None, None, None  # player movement -> new Game.turn!
             # print(pygame.mouse.get_pos(), Viewer.pixel_to_tile(pygame.mouse.get_pos()))
             # print(self.playergroup[0].pos, self.playergroup[0].cannon_angle)
-
 
             # -------- events ------
             for event in pygame.event.get():
@@ -3153,9 +3159,7 @@ class Viewer:
             if selection is not None:
                 hero.shoot_arrow(*selection)
                 selection = None
-                self.repaint_screen(
-                    panel_has_changed, dungeon_has_changed
-                )  # finish
+                self.repaint_screen(panel_has_changed, dungeon_has_changed)  # finish
                 self.loglines.extend(self.g.turn(0, 0))  # waste a turn for shooting
                 panel_has_changed = True
 
