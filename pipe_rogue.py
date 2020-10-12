@@ -957,9 +957,15 @@ class Game:
         Game.turn_number += 1
         text = []
         hero = Game.player
-        hero.update()
+        #hero.update()
         # tile = Game.dungeon[hero.z][hero.y][hero.x]
-
+        # ------- update all buffs -----
+        # ------ update buffs of each monster -----
+        for m in [m for m in Game.zoo.values() if m.z == hero.z and m.hp >0]:
+            for b in m.buffs:
+                b.update()
+            m.buffs = [b for b in m.buffs if b.active]
+            print(m, m.buffs)
         # --------- move the hero --------------
         text.extend(self.move(hero, dx, dy))  # test if move is legal and move
         # found stair?
@@ -1056,6 +1062,7 @@ class Game:
         ]:
             dxm, dym = m.ai()
             text.extend(self.move(m, dxm, dym))
+
         # ---- calculate if player suffer from monster shooting ----
         # ------------- iterating over (damage) effects at player position ------
         for e in [
@@ -1750,32 +1757,62 @@ class Buff:
     pictures = []
     fgcolor = (0, 200, 0)
     number = 0
+    max_age = 4
+    mana_cost = 0   # initial cost
+    mana_upkeep = 0 # cost per turn
+    hp_change = 0
+    unique = False
+    char = "?"
 
-    def __init__(
-        self, monsternumber, age=0, max_age=None, mana_cost=None, mana_upkeep=None
-    ):
+    def __init__(self, monsternumber  ):
+        if self.unique:
+            Game.zoo[monsternumber].buffs = [
+                b for b in Game.zoo[monsternumber].buffs
+                if not isinstance(b, self.__class__)
+            ]
+
+
         self.number = Buff.number  # unique number
         self.monsternumber = monsternumber
         Buff.number += 1
-        self.age = age
-        self.max_age = max_age
-        self.mana_cost = mana_cost
-        self.mana_upkeep = mana_upkeep
+        self.age = 0
         Game.zoo[self.monsternumber].buffs.append(self)
         self.active = True
+
+    @classmethod
+    def create_pictures(cls):
+        pic = make_text(text=cls.char, fgcolor=cls.fgcolor,
+                        font=Viewer.font2)
+        pic = pygame.transform.scale(pic,
+                                     (Viewer.gridsize[0]//2,
+                                      Viewer.gridsize[1]//2))
+        cls.pictures.append(pic)
 
     def update(self):
         """check if buff cancel itself by lack of mana / or reaching max_age"""
         # check if monster is still in zoo? not necessary?
+        m = Game.zoo[self.monsternumber]
         # ----- aging ----
         self.age += 1
-        if self.max_age is not None and self.age > self.max_age:
+        if self.age >= self.max_age:
             self.active = False
-        if (
-            self.mana_upkeep is not None
-            and self.mana_upkeep > Game.zoo[self.monsternumber].mana
-        ):
+        if self.mana_upkeep > Game.zoo[self.monsternumber].mana:
             self.active = False
+        m.mana -= self.mana_upkeep
+        m.hp += self.hp_change
+        if self.hp_change != 0:
+            Flytext(tx=m.x, ty=m.y, fontsize=12,
+                    text=f"{self.__class__.__name__} {self.hp_change} hp")
+
+class Burning(Buff):
+    pictures = []
+    fgcolor = (255, 75, 0)
+    mana_upkeep = False
+    hp_change = -1
+    max_age = 4
+    unique = False
+    char = "\U0001F525"
+
 
 
 class Monster:
@@ -2220,7 +2257,7 @@ class Viewer:
             Viewer.images["bow_no"], (255, 0, 0), (0, 0), Viewer.gridsize, 5
         )
         pygame.draw.line(
-            Viewer.images["bow_no"], (255,0,0), (Viewer.gridsize[0],0),()
+            Viewer.images["bow_no"], (255,0,0), (Viewer.gridsize[0],0),(0, Viewer.gridsize[1]), 5
         )
 
         # --- sub-images from main.png:
@@ -2264,6 +2301,9 @@ class Viewer:
             sc.create_pictures()
         for sc in Monster.__subclasses__():
             sc.create_pictures()
+        for sc in Buff.__subclasses__():
+            sc.create_pictures()
+
         Monster.create_pictures()  # twice??
 
     def make_radar(self):
@@ -2700,6 +2740,12 @@ class Viewer:
                     # monstercounter = len(monsters)
                     for m in monsters:
                         self.screen.blit(m.fovpicture(), (x, y))
+                        # ----display up to 4 active effects in each corner of monster
+                        for nr, b in enumerate(m.buffs):
+                            self.screen.blit(b.pictures[0], (x+Viewer.gridsize[0]//2 * nr,y))
+
+
+
                         if (
                             isinstance(m, Player) and m.shield
                         ):  # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
@@ -3115,6 +3161,12 @@ class Viewer:
                             dx, dy = 0, 0
                             self.loglines.extend(self.g.close_door())
                             dungeon_has_changed = True
+                        if event.key == pygame.K_t:
+                            # ----------- testing key -------
+                            # testing the buring buff
+                            Burning(monsternumber=hero.number)
+                            Flytext(tx=hero.x, ty=hero.y,
+                                    text="Burning starts")
                         if event.key == pygame.K_e:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
