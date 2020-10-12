@@ -33,6 +33,10 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: cursormode: better no-bow picture, cleanup when using esc, show illegal tiles and shooting path
+# TODO: panelinfo disappeard for tiles under cursor
+# TODO: more pretty font for every (fly)text
+# TODO: size parameter at make_text seem not to work -> need pygame.transform.scale instead?
 # TODO: movement phases -> player shoot, monster shoot, player move, monster move?
 # TODO: Flytext is invisible when color=(0,0,0)
 # TODO: flyingobject- mode (flytext) for viewer.run -> nothing else happens until all flyers are finished flying around
@@ -1793,19 +1797,21 @@ class Buff:
         m = Game.zoo[self.monsternumber]
         # ----- aging ----
         self.age += 1
-        if self.age >= self.max_age:
+        if self.max_age is not None and self.age >= self.max_age:
             self.active = False
-        if self.mana_upkeep > Game.zoo[self.monsternumber].mana:
-            self.active = False
-        m.mana -= self.mana_upkeep
-        m.hp += self.hp_change
-        if self.hp_change != 0:
-            Flytext(
-                tx=m.x,
-                ty=m.y,
-                fontsize=12,
-                text=f"{self.__class__.__name__} {self.hp_change} hp",
-            )
+        if self.mana_upkeep is not None:
+            if self.mana_upkeep > Game.zoo[self.monsternumber].mana:
+                self.active = False
+            m.mana -= self.mana_upkeep
+        if self.hp_change is not None:
+            m.hp += self.hp_change
+            if self.hp_change != 0:
+                Flytext(
+                    tx=m.x,
+                    ty=m.y,
+                    fontsize=12,
+                    text=f"{self.__class__.__name__} {self.hp_change} hp",
+                )
 
 
 class Burning(Buff):
@@ -1816,6 +1822,28 @@ class Burning(Buff):
     max_age = 4
     unique = False
     char = "\U0001F525"
+
+class Shield(Buff):
+    pictures = []
+    fgcolor = (0,0, 128)
+    mana_upkeep = 1
+    mana_cost = 50
+    max_age = None
+    unique = True
+
+    def __init__(self, monsternumber):
+        super().__init__(monsternumber)
+        self.strenght = 100
+
+    @classmethod
+    def create_pictures(cls):
+        pic = Viewer.images["shield"]
+        pic = pygame.transform.scale(
+            pic, (Viewer.gridsize[0] // 2, Viewer.gridsize[1] // 2)
+        )
+        cls.pictures.append(pic)
+
+
 
 
 class Monster:
@@ -2120,19 +2148,19 @@ class Player(Monster):
             # ---- destroy arrow ----
             del Game.items[arrows[0].number]
 
-    def toggle_shield(self):
-        if self.shield:  # turn shield off
-            self.shield = False
-            Flytext(tx=self.x, ty=self.y, text="shield deactivated")
-            return
-        # turn shield on if enoug mana
-        if self.mana <= 15:
-            Flytext(tx=self.x, ty=self.y, text="not enough mana!")
-            return
-        # activate shield
-        self.mana -= self.shield_cost
-        self.shield = True
-        Flytext(tx=self.x, ty=self.y, text="shield activated!")
+    #def toggle_shield(self):
+    #    if self.shield:  # turn shield off
+    #        self.shield = False
+    #        Flytext(tx=self.x, ty=self.y, text="shield deactivated")
+    #        return
+    #    # turn shield on if enoug mana
+    #    if self.mana <= 15:
+    #        Flytext(tx=self.x, ty=self.y, text="not enough mana!")
+    #        return
+    #    # activate shield
+    #    self.mana -= self.shield_cost
+    #    self.shield = True
+    #    Flytext(tx=self.x, ty=self.y, text="shield activated!")
 
 
 class Viewer:
@@ -2249,8 +2277,9 @@ class Viewer:
         Viewer.images["main"] = pygame.image.load(
             os.path.join("data", "from_stone_soup", "main.png")
         ).convert_alpha()
+        # ----- images from battle of wesnoth ------
         Viewer.images["bow"] = pygame.image.load(
-            os.path.join("data", "skill_bow.png")
+            os.path.join("data","from_wesnoth", "skill_bow.png")
         ).convert_alpha()
         Viewer.images["bow"] = pygame.transform.scale(
             Viewer.images["bow"], Viewer.gridsize
@@ -2266,6 +2295,7 @@ class Viewer:
             (0, Viewer.gridsize[1]),
             5,
         )
+        Viewer.images["shield"] = pygame.image.load(os.path.join("data", "from_wesnoth", "shield_wooden.png")).convert_alpha()
 
         # --- sub-images from main.png:
         # tmp = pygame.Surface.subsurface(
@@ -2748,22 +2778,35 @@ class Viewer:
                     for m in monsters:
                         self.screen.blit(m.fovpicture(), (x, y))
                         # ----display up to 4 active effects in each corner of monster
+                        # start first buff in lower right corner,
+                        # second buff in lower left corner,
+                        # third buff in top right corner
+                        # fouth buff in top left corner
                         for nr, b in enumerate(m.buffs):
+                            if nr in [0, 1]:
+                                by = Viewer.gridsize[1] // 2
+                            else:
+                                by = 0
+                            if nr in [0, 2]:
+                                bx = Viewer.gridsize[0] //2
+                            else:
+                                bx = 0
+
                             self.screen.blit(
-                                b.pictures[0], (x + Viewer.gridsize[0] // 2 * nr, y)
+                                b.pictures[0], (x + bx, y+by)
                             )
 
-                        if (
-                            isinstance(m, Player) and m.shield
-                        ):  # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
-                            self.screen.blit(
-                                make_text(
-                                    "\U0001F53B",
-                                    fgcolor=(0, 0, 255),
-                                    alpha=200,
-                                ),
-                                (x, y),
-                            )
+                        #if (
+                        #    isinstance(m, Player) and m.shield
+                        #):  # umbrella: "\u2614", rectangle (smartphone): "\U0001F581"  # triangle: "\U0001F53B",  mushroom: \U0001F344"
+                        #    self.screen.blit(
+                        #        make_text(
+                        #            "\U0001F53B",
+                        #            fgcolor=(0, 0, 255),
+                        #            alpha=200,
+                        #        ),
+                        #        (x, y),
+                        #    )
 
                     # ------------- effects --------------
                     for e in [
@@ -3043,7 +3086,13 @@ class Viewer:
             self.visiblegroup.draw(self.screen)
             self.cursorgroup.draw(self.screen)
             if self.cursormode:
-                self.screen.blit(Viewer.images["bow_no"], pygame.mouse.get_pos())
+                #... self.cursor.tx, self.cursor.ty
+                ok = calculate_line((Game.player.x,Game.player.y),(self.cursor.tx, self.cursor.tx), Game.player.z,  "shoot" )
+                if ok:
+                    image = Viewer.images["bow"]
+                else:
+                    image = Viewer.images["bow_no"]
+                self.screen.blit(image, pygame.mouse.get_pos())
             pygame.display.flip()
             # repaint = False
             if len(self.flygroup) > 0:
@@ -3160,9 +3209,7 @@ class Viewer:
                             dx, dy = 0, 0
                             self.loglines.extend(self.g.turn(0, 0))
                             dungeon_has_changed = True
-                        if event.key == pygame.K_p:
-                            Game.player.toggle_shield()
-                            panel_has_changed = True
+
                         if event.key == pygame.K_c:
                             # close door
                             dx, dy = 0, 0
@@ -3173,6 +3220,21 @@ class Viewer:
                             # testing the buring buff
                             Burning(monsternumber=hero.number)
                             Flytext(tx=hero.x, ty=hero.y, text="Burning starts")
+                        if event.key == pygame.K_p:
+                            #Game.player.toggle_shield()
+                            #panel_has_changed = True
+                            print("buffs:", hero.buffs)
+                            have_shield = False
+                            for b in hero.buffs:
+                                if isinstance(b, Shield):
+                                    have_shield = True
+                                    break
+                            if have_shield:
+                                hero.buffs = [b for b in hero.buffs if not isinstance(b, Shield)]
+                                Flytext(tx=hero.x, ty=hero.y, text="Shield deactivated")
+                            else:
+                                Shield(monsternumber=hero.number)
+                                Flytext(tx=hero.x, ty=hero.y, text="Shield activated")
                         if event.key == pygame.K_e:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
