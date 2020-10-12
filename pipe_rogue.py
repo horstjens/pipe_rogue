@@ -65,6 +65,7 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: arrow sprite uses unicode glyph like Item
 # done: shooting through walls is possible?!
 # done: minimalspeed für Arrow, soll trotzdem am target_tile verschwinden - max_distance
 # done: use arrows for shooting -> destroy used arrow
@@ -541,7 +542,7 @@ class FlyingObject(VectorSprite):
     except arguments: start_tile, end_tile"""
 
     def _overwrite_parameters(self):
-        self.picture = Viewer.images["arrow"]
+        #self.picture = image #Viewer.images["arrow"]
         print("arrow from", self.start_tile, "to", self.end_tile)
         self.pos = Viewer.tile_to_pixel(self.start_tile)
         if self.max_age is None:
@@ -2027,7 +2028,7 @@ class Player(Monster):
         check if player has an arrow"""
         arrows = [i for i in Game.items.values() if isinstance(i, Arrow) and i.backpack]
         if len(arrows) == 0:
-            #if not arrows:
+            # if not arrows:
             Flytext(tx=self.x, ty=self.y, text="No arrow!", fontsize=12)
             print("no arrow")
             return
@@ -2073,7 +2074,7 @@ class Player(Monster):
                     # Bubble(pos=p, age=-0.5)
         # ----- fly arrow from player to point! because flight-path may be blocked
         if point != points[1]:
-            FlyingObject(start_tile=points[0], end_tile=point)
+            FlyingObject(start_tile=points[0], end_tile=point, picture=Arrow.pictures[0])
             # ---- destroy arrow ----
             del Game.items[arrows[0].number]
 
@@ -2206,11 +2207,18 @@ class Viewer:
         Viewer.images["main"] = pygame.image.load(
             os.path.join("data", "from_stone_soup", "main.png")
         ).convert_alpha()
+        Viewer.images["bow"] = pygame.image.load(
+            os.path.join("data", "skill_bow.png")
+        ).convert_alpha()
+        Viewer.images["bow"] = pygame.transform.scale(Viewer.images["bow"], Viewer.gridsize)
+        Viewer.images["bow_no"] = Viewer.images["bow"].copy()
+        pygame.draw.line(Viewer.images["bow_no"], (255,0,0), (0,0), Viewer.gridsize, 5)
+
         # --- sub-images from main.png:
-        tmp = pygame.Surface.subsurface(
-            Viewer.images["main"], (808, 224, 22, 7)
-        )  # arrow
-        Viewer.images["arrow"] = pygame.transform.scale(tmp, (35, 8))
+        #tmp = pygame.Surface.subsurface(
+        #    Viewer.images["main"], (808, 224, 22, 7)
+        #)  # arrow
+        #Viewer.images["arrow"] = pygame.transform.scale(tmp, (35, 8))
 
         # tmp = pygame.Surface.subsurface(
         #    Viewer.images["main"], (22, 840, 16, 16)
@@ -2902,63 +2910,86 @@ class Viewer:
                 font_size=14,
             )
 
-    def repaint_screen(self, seconds, panel_has_changed=False, dungeon_has_changed=False):
+    def repaint_screen(self, panel_has_changed=False, dungeon_has_changed=False):
         """called 60 times per second from Viewer.run"""
         # -------------------------delete everything on screen--------------------------------------
         # pygame.display.set_caption(str(cursormode))
         # repaint = True
-        repaint = False
-        if self.cursormode or len(self.flygroup) > 0 or len(self.flytextgroup) > 0 or len(self.fxgroup):
-            repaint = True
-        if dungeon_has_changed:
-            ## kill old sprites of effects:
-            # for n in [sprite for sprite in self.effectgroup]:
-            #    print("iterating over effects", n)
+        while True:
+            milliseconds = self.clock.tick(self.fps)  #
+            seconds = milliseconds / 1000
+            self.playtime += seconds
+            # ---- calculate fps ----
+            fps_text = "pipe_roge ({}x{}) FPS: {:8.3}".format(
+                Viewer.width, Viewer.height, self.clock.get_fps()
+            )
+            # pygame.display.set_caption("pipe_rogue version:".format(version))
+            pygame.display.set_caption(fps_text)
+            repaint = False
+            # or len(self.flytextgroup) > 0
+            if (
+                self.cursormode
+                or len(self.flygroup) > 0
+                or len(self.fxgroup)
+            ):
+                repaint = True
+            if dungeon_has_changed:
+                ## kill old sprites of effects:
+                # for n in [sprite for sprite in self.effectgroup]:
+                #    print("iterating over effects", n)
 
-            self.screen.blit(self.background, (0, 0))
-            self.paint_tiles()
-            self.make_radar()
-            self.make_panel()
-            self.make_log()
-            ##pygame.display.flip() # bad idea
-            self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth, 0))
-            self.screen.blit(self.logscreen, (0, Viewer.height - Viewer.logheight))
-            self.screen_backup = self.screen.copy()
-            # testing...
-            # for x, i in enumerate(Flash.pictures):
-            #    self.screen.blit(i, (x * Viewer.gridsize[0], 20))
-            #    #input("...")
-        if repaint:
-            self.screen.blit(self.screen_backup, (0,0))
+                self.screen.blit(self.background, (0, 0))
+                self.paint_tiles()
+                self.make_radar()
+                self.make_panel()
+                self.make_log()
+                ##pygame.display.flip() # bad idea
+                self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth, 0))
+                self.screen.blit(self.logscreen, (0, Viewer.height - Viewer.logheight))
+                self.screen_backup = self.screen.copy()
+                # testing...
+                # for x, i in enumerate(Flash.pictures):
+                #    self.screen.blit(i, (x * Viewer.gridsize[0], 20))
+                #    #input("...")
+            if repaint:
+                self.screen.blit(self.screen_backup, (0, 0))
 
-        self.cursorgroup.clear(self.screen, self.screen_backup)
-        self.screen.blit(
-            self.panelscreen, (Viewer.width - Viewer.panelwidth, Viewer.panelwidth)
-        )
+            self.cursorgroup.clear(self.screen, self.screen_backup)
+            if panel_has_changed:
+                self.make_panel()
+            self.screen.blit(
+                self.panelscreen, (Viewer.width - Viewer.panelwidth, Viewer.panelwidth)
+            )
 
-        # ---- clear old effect, paint new effects ----
-        self.paint_animation(seconds)
-        # ---- update panel with help for tile on cursor -----
-        if not self.cursormode:
-            self.panelinfo()
-        # ---- update -----------------
-        self.allgroup.update(seconds)
-        self.cursorgroup.update(seconds)
-        # ----------- draw  -----------------
-        self.allgroup.draw(self.screen)
-        # self.visiblegroup.empty()
-        self.visiblegroup = self.allgroup.copy()
-        for s in self.visiblegroup:
-            if not s.visible:
-                s.rect.centery = -500
-        # for s in self.allgroup:
-        #    if s.visible:
-        #        self.visiblegroup.add(s)
-        # visiblegroup = [s for s in self.allgroup if s.visible]
-        self.visiblegroup.draw(self.screen)
-        self.cursorgroup.draw(self.screen)
-        pygame.display.flip()
-        #repaint = False
+            # ---- clear old effect, paint new effects ----
+            self.paint_animation(seconds)
+            # ---- update panel with help for tile on cursor -----
+            if not self.cursormode:
+                self.panelinfo()
+            # ---- update -----------------
+            self.allgroup.update(seconds)
+            self.cursorgroup.update(seconds)
+            # ----------- draw  -----------------
+            self.allgroup.draw(self.screen)
+            # self.visiblegroup.empty()
+            self.visiblegroup = self.allgroup.copy()
+            for s in self.visiblegroup:
+                if not s.visible:
+                    s.rect.centery = -500
+            # for s in self.allgroup:
+            #    if s.visible:
+            #        self.visiblegroup.add(s)
+            # visiblegroup = [s for s in self.allgroup if s.visible]
+            self.visiblegroup.draw(self.screen)
+            self.cursorgroup.draw(self.screen)
+            if self.cursormode:
+                self.screen.blit(Viewer.images["bow_no"], pygame.mouse.get_pos())
+            pygame.display.flip()
+            # repaint = False
+            if len(self.flygroup) > 0:
+                continue
+            break
+        return
 
     def run(self):
         """The mainloop"""
@@ -2992,20 +3023,12 @@ class Viewer:
         )
         # Flytext(text="press h for help", age=-2)
         # self.screen_backup = self.screen.copy()
-        self.repaint_screen(0,True, True)
+        #self.repaint_screen(True, True) # force painting of screen
         while running:
-            dx, dy, dz = None, None, None # player movement -> new Game.turn!
+            dx, dy, dz = None, None, None  # player movement -> new Game.turn!
             # print(pygame.mouse.get_pos(), Viewer.pixel_to_tile(pygame.mouse.get_pos()))
             # print(self.playergroup[0].pos, self.playergroup[0].cannon_angle)
-            milliseconds = self.clock.tick(self.fps)  #
-            seconds = milliseconds / 1000
-            self.playtime += seconds
-            # ---- calculate fps ----
-            fps_text = "pipe_roge ({}x{}) FPS: {:8.3}".format(
-                Viewer.width, Viewer.height, self.clock.get_fps()
-            )
-            # pygame.display.set_caption("pipe_rogue version:".format(version))
-            pygame.display.set_caption(fps_text)
+
 
             # -------- events ------
             for event in pygame.event.get():
@@ -3048,12 +3071,16 @@ class Viewer:
                                 for i in Viewer.radardot
                             ]
                             self.make_radar()
-                            self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth, 0))
-                            #dungeon_has_changed = True
+                            self.screen.blit(
+                                self.radarscreen, (Viewer.width - Viewer.panelwidth, 0)
+                            )
+                            # dungeon_has_changed = True
                         if event.key == pygame.K_MINUS:
                             Viewer.radardot = [max(1, i // 2) for i in Viewer.radardot]
                             self.make_radar()
-                            self.screen.blit(self.radarscreen, (Viewer.width - Viewer.panelwidth, 0))
+                            self.screen.blit(
+                                self.radarscreen, (Viewer.width - Viewer.panelwidth, 0)
+                            )
                         if event.key == pygame.K_w:
                             dx, dy = 0, -1
                             self.loglines.extend(self.g.turn(0, -1))
@@ -3110,7 +3137,6 @@ class Viewer:
                             else:
                                 self.loglines.append("You must find a stair")
 
-
             # ------------ pressed keys ------
             # pressed_keys = pygame.key.get_pressed()
 
@@ -3127,11 +3153,13 @@ class Viewer:
             if selection is not None:
                 hero.shoot_arrow(*selection)
                 selection = None
-                self.repaint_screen(seconds, panel_has_changed, dungeon_has_changed) # finish
+                self.repaint_screen(
+                    panel_has_changed, dungeon_has_changed
+                )  # finish
                 self.loglines.extend(self.g.turn(0, 0))  # waste a turn for shooting
                 panel_has_changed = True
 
-            self.repaint_screen(seconds, panel_has_changed, dungeon_has_changed)
+            self.repaint_screen(panel_has_changed, dungeon_has_changed)
             repaint = False
             dungeon_has_changed = False
             # -----------------------------------------------------
