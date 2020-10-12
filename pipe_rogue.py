@@ -957,11 +957,11 @@ class Game:
         Game.turn_number += 1
         text = []
         hero = Game.player
-        #hero.update()
+        # hero.update()
         # tile = Game.dungeon[hero.z][hero.y][hero.x]
         # ------- update all buffs -----
         # ------ update buffs of each monster -----
-        for m in [m for m in Game.zoo.values() if m.z == hero.z and m.hp >0]:
+        for m in [m for m in Game.zoo.values() if m.z == hero.z and m.hp > 0]:
             for b in m.buffs:
                 b.update()
             m.buffs = [b for b in m.buffs if b.active]
@@ -1758,19 +1758,19 @@ class Buff:
     fgcolor = (0, 200, 0)
     number = 0
     max_age = 4
-    mana_cost = 0   # initial cost
-    mana_upkeep = 0 # cost per turn
+    mana_cost = 0  # initial cost
+    mana_upkeep = 0  # cost per turn
     hp_change = 0
     unique = False
     char = "?"
 
-    def __init__(self, monsternumber  ):
+    def __init__(self, monsternumber):
         if self.unique:
             Game.zoo[monsternumber].buffs = [
-                b for b in Game.zoo[monsternumber].buffs
+                b
+                for b in Game.zoo[monsternumber].buffs
                 if not isinstance(b, self.__class__)
             ]
-
 
         self.number = Buff.number  # unique number
         self.monsternumber = monsternumber
@@ -1781,11 +1781,10 @@ class Buff:
 
     @classmethod
     def create_pictures(cls):
-        pic = make_text(text=cls.char, fgcolor=cls.fgcolor,
-                        font=Viewer.font2)
-        pic = pygame.transform.scale(pic,
-                                     (Viewer.gridsize[0]//2,
-                                      Viewer.gridsize[1]//2))
+        pic = make_text(text=cls.char, fgcolor=cls.fgcolor, font=Viewer.font2)
+        pic = pygame.transform.scale(
+            pic, (Viewer.gridsize[0] // 2, Viewer.gridsize[1] // 2)
+        )
         cls.pictures.append(pic)
 
     def update(self):
@@ -1801,8 +1800,13 @@ class Buff:
         m.mana -= self.mana_upkeep
         m.hp += self.hp_change
         if self.hp_change != 0:
-            Flytext(tx=m.x, ty=m.y, fontsize=12,
-                    text=f"{self.__class__.__name__} {self.hp_change} hp")
+            Flytext(
+                tx=m.x,
+                ty=m.y,
+                fontsize=12,
+                text=f"{self.__class__.__name__} {self.hp_change} hp",
+            )
+
 
 class Burning(Buff):
     pictures = []
@@ -1812,7 +1816,6 @@ class Burning(Buff):
     max_age = 4
     unique = False
     char = "\U0001F525"
-
 
 
 class Monster:
@@ -2257,7 +2260,11 @@ class Viewer:
             Viewer.images["bow_no"], (255, 0, 0), (0, 0), Viewer.gridsize, 5
         )
         pygame.draw.line(
-            Viewer.images["bow_no"], (255,0,0), (Viewer.gridsize[0],0),(0, Viewer.gridsize[1]), 5
+            Viewer.images["bow_no"],
+            (255, 0, 0),
+            (Viewer.gridsize[0], 0),
+            (0, Viewer.gridsize[1]),
+            5,
         )
 
         # --- sub-images from main.png:
@@ -2742,9 +2749,9 @@ class Viewer:
                         self.screen.blit(m.fovpicture(), (x, y))
                         # ----display up to 4 active effects in each corner of monster
                         for nr, b in enumerate(m.buffs):
-                            self.screen.blit(b.pictures[0], (x+Viewer.gridsize[0]//2 * nr,y))
-
-
+                            self.screen.blit(
+                                b.pictures[0], (x + Viewer.gridsize[0] // 2 * nr, y)
+                            )
 
                         if (
                             isinstance(m, Player) and m.shield
@@ -3165,8 +3172,7 @@ class Viewer:
                             # ----------- testing key -------
                             # testing the buring buff
                             Burning(monsternumber=hero.number)
-                            Flytext(tx=hero.x, ty=hero.y,
-                                    text="Burning starts")
+                            Flytext(tx=hero.x, ty=hero.y, text="Burning starts")
                         if event.key == pygame.K_e:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
