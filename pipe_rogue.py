@@ -33,33 +33,26 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: somehow show remaining strenght of shield buff, test if shield buff cancels correctly if strenght == 0
 # TODO: redraw-order: arrow drops correctly at end of flight path, but is not visible until new turn (space pressed)
-# done: player can display up to 9 mini-buff icons (3x3 grid), starting from lower-right corner
 # TODO: cursormode: , cleanup when using esc,
-# done cursormode: better no-bow picture, show illegal tiles
-# done: panelinfo disappeard for tiles under cursor
 # TODO: more pretty font for every (fly)text
 # TODO: size parameter at make_text seem not to work -> need pygame.transform.scale instead?
 # TODO: movement phases -> player shoot, monster shoot, player move, monster move?
 # TODO: Flytext is invisible when color=(0,0,0)
-# done: flyingobject- mode (flytext) for viewer.run -> nothing else happens until all flyers are finished flying around
-# done: aim mode: show hit-propability at cursor tile
 # TODO: make update for effects instead of processing_effects
-# TODO: shield: should protect from combat (and fire?) damange, should prevent attacking in meleee
+
 # TODO: monster update should call monster_ai
 # TODO: GUI buttons for commands
 # TODO: GUI yes-no box
 # TODO: save and load game to/from disk
 # TODO: PgUp/PgDown should scroll log text
-# done: flying arrow should not leave blurred "path" (repaint)
 # TODO: help text of all keyboard commands
-# done: better (longer) chars / glyphs for glass window, door
-# TODO: better code for FireDragon ( hunt/flee ), keep distance, reload...
 # TODO: Flames / Water becoming smaller and smaller before disappearing
 # TODO: progress bar for terminal download
 # TODO: learn LayerdDirty Spritegroups, update all sprites to DirtySprites -> make dirty and visible work correctly
 # TODO: game menu, death of player -> newstart
-# TODO: include pathfinding from test
+# TODO: include pathfinding from test for Monster hunting
 # TODO: save levels to pickle, load levels when changing player.z
 # TODO: dungeon generator, dungeon Viewer / Editor (pysimplegui?)
 # TODO: include complex fight / strike system
@@ -72,6 +65,15 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: better code for FireDragon ( hunt/flee ), keep distance, reload...
+# done: shield: should protect from effect damange,
+# done: player can display up to 9 mini-buff icons (3x3 grid), starting from lower-right corner
+# done cursormode: better no-bow picture, show illegal tiles
+# done: panelinfo disappeard for tiles under cursor
+# done: flyingobject- mode (flytext) for viewer.run -> nothing else happens until all flyers are finished flying around
+# done: aim mode: show hit-propability at cursor tile
+# done: flying arrow should not leave blurred "path" (repaint)
+# done: better (longer) chars / glyphs for glass window, door
 # done: arrow sprite uses unicode glyph like Item
 # done: shooting through walls is possible?!
 # done: minimalspeed für Arrow, soll trotzdem am target_tile verschwinden - max_distance
@@ -1039,6 +1041,7 @@ class Game:
             for m in Game.zoo.values()
             if m.number != hero.number and m.z == hero.z and m.hp > 0
         ]:
+            print("dxm..", m)
             dxm, dym = m.ai()
             text.extend(self.move(m, dxm, dym))
 
@@ -1047,10 +1050,11 @@ class Game:
         for e in [
             e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y
         ]:
-            damage = e.damage
-            text.append(f"You suffer {damage} {e.__class__.__name__} damage")
-            e.text_effect(damage)
-            hero.hp -= e.damage
+            text.append(e.make_damage(Game.player))
+            #damage = e.damage
+            #text.append(f"You suffer {damage} {e.__class__.__name__} damage")
+            #e.text_effect(damage)
+            #hero.hp -= e.damage
         # cleanup code, remove dead monsters:
         for m in [m for m in Game.zoo.values() if m.hp <= 0]:
             if m.number == hero.number:
@@ -1155,6 +1159,19 @@ class Effect:
         self.light_radius = (
             0  # if > 0 then the effect itself emits light (flame, fireball etc)
         )
+
+    def make_damage(self, victim):
+        for b in victim.buffs:
+            if isinstance(b, Shield):
+                b.strenght -= 1
+                if b.strenght == 0:
+                    Flytext(tx=victim.x, ty=victim.y, text="Shield destroyed!")
+                return f"{self.__class__.__name__} damage negated by shield buff"
+        victim.hp -= self.damage
+        Flytext(tx=victim.x, ty=victim.y, text= f"{self.__class__.__name__} dmg: -{self.damage}hp")
+        return f"You suffer {self.damage} points of {self.__class__.__name__} damage"
+
+
 
     def next_turn(self):
         # self.age = Game.turn_number - self.born
@@ -1766,15 +1783,13 @@ class Monster:
     char = "\U0001F620"  # angry blob  "\U0001F608"  # angry emoticon
     ai_dx = (0, 0, 0, 1, -1)
     ai_dy = (0, 0, 0, 1, -1)
+    p_hunting = 0.5  # probability to move towards player
 
     @classmethod
     def create_pictures(cls):
         pic = make_text(cls.char, cls.fgcolor, font=Viewer.font2)
         cls.pictures.append(pic)
 
-    @classmethod
-    def ai(cls):
-        return random.choice(cls.ai_dx), random.choice(cls.ai_dy)
 
     def __init__(self, x, y, z):
         self.number = Game.monsternumber  # get unique monsternumber
@@ -1788,6 +1803,27 @@ class Monster:
         # self.fgcolor = (255,0,0)# "red"
         self.friendly = False  # friendly towards player?
         # self.char = "M"  # Monster
+
+
+    def ai(self):
+        # hunt player or move around at random?
+        if random.random() >= self.p_hunting:
+            print("ai not hunting", self)
+            return random.choice(self.ai_dx), random.choice(self.ai_dy)
+        print("ai hunting", self)
+        if Game.player.x == self.x:
+            dx = 0
+        elif Game.player.x < self.x:
+            dx = -1
+        else:
+            dx = 1
+        if Game.player.y == self.y:
+            dy = 0
+        elif Game.player.y < self.y:
+            dy = -1
+        else:
+            dy = 1
+        return dx, dy
 
     def update(self):
         """called once per game-turn for each monster"""
@@ -1810,8 +1846,8 @@ class FireDragon(Monster):
     pictures = []
     fgcolor = (255, 90, 0)  # orange
     char = "\U0001F409"
-    p_shoot = 0.2  # probabiltiy to shoot at player
-    p_hunt = 0.8  # probability to move towards player
+    p_shooting = 0.2  # probabiltiy to shoot at player
+    p_hunting = 0.6  # probability to move towards player
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1822,7 +1858,7 @@ class FireDragon(Monster):
         # ---fire spitting---
         if Game.dungeon[self.z][self.y][self.x].fov:  # visible?
             # print("FireDragon spitting...")
-            if random.random() < self.p_shoot:
+            if random.random() < self.p_shooting:
                 # print("Fire spit!...")
                 # spit fire if line-of-shight for shooting is True (can shoot)
                 if calculate_line(
@@ -1837,40 +1873,23 @@ class FireDragon(Monster):
                         Fire(f[0], f[1], max_age=1)
         # else:
         # print("firedragon not in fov")
-
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        return dx, dy
+        return super().ai()
 
 
 class SkyDragon(Monster):
     pictures = []
     fgcolor = (0, 0, 200)  # cyan
     char = "\U0001F479"  # japanese ogre "#"W" #char = "S"
+    p_hunting = 0.4
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 50
         self.friendly = False  # friendly towards player?
 
-    def oldai(self):
+    def ai(self):
         # ---fire spitting---
+        print("flash ai is in use")
         if Game.dungeon[self.z][self.y][self.x]:  # visible?
             if random.random() < 0.1:
                 can_shoot = calculate_line(
@@ -1885,38 +1904,21 @@ class SkyDragon(Monster):
                     for f in points[:10]:
                         Flash(f[0], f[1], max_age=1)
 
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        return dx, dy
+        return super().ai()
 
 
 class WaterDragon(Monster):
     pictures = []
     fgcolor = (0, 0, 255)  # blue
     char = "\U0001F419"  # octopus "#"W"
+    p_hunting = 0.3
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
         self.hp = 25
         self.friendly = False  # friendly towards player?
 
-    def oldai(self):
+    def ai(self):
         # ---water spitting---
         if Game.dungeon[self.z][self.y][self.x]:  # visible?
             if random.random() < 0.5:
@@ -1931,26 +1933,10 @@ class WaterDragon(Monster):
                     points = get_line((self.x, self.y), (Game.player.x, Game.player.y))
                     for f in points[:6]:
                         Water(f[0], f[1], max_age=3)
+        return super().ai()
 
-        dx = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        dy = random.choice(
-            (
-                0,
-                0,
-                0,
-                1,
-                -1,
-            )
-        )
-        return dx, dy
+
+
 
 
 class Player(Monster):
@@ -3561,7 +3547,7 @@ legend = {
 }
 level1 = """
 ######################################
-#@kdMMMMMMM..........TTT....$.....M..#
+#@kd.................TTT....$.....M..#
 #>a########gd#.....#...t....#...#....#
 ##a#.##f..#gd#.#...#.......###.......#
 #.$$.M....gß.g.#...#...ff..#...$...k.#
