@@ -41,7 +41,6 @@ unicode tables:
 # TODO: movement phases -> player shoot, monster shoot, player move, monster move?
 # TODO: Flytext is invisible when color=(0,0,0)
 # TODO: make update for effects instead of processing_effects
-
 # TODO: monster update should call monster_ai
 # TODO: GUI buttons for commands
 # TODO: GUI yes-no box
@@ -993,6 +992,15 @@ class Game:
             north = Game.dungeon[hero.z][hero.y - 1][hero.x]
             if isinstance(north, Terminal):
                 text.append("press e to activate the terminal")
+        # ---------- checking if standing next to a World ------
+        if (hero.y > 0 and hero.x > 0 and
+            hero.y < len(Game.dungeon[hero.z]) - 1 and
+            hero.x < len(Game.dungeon[hero.z][0]) -1):
+            for dx, dy in ((0,-1),(1,0),(0,1),(-1,0)):
+                t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
+                if isinstance(t, World):
+                    text.append("press e to upload your downloads to the world")
+
         # ------------- iterating over (damage) effects at player position ------
         # for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
         #    text.append(f"You suffer {e.damage} {e.__class__.__name__} damage")
@@ -1296,6 +1304,7 @@ class Structure:
         # self.char = None  # for textual representation btw for make_text(char)
         # self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
 
+
     def create_pictures(self, neighborlist=None, fontsize=48, mono=False):
         self.exploredpic = make_text(
             self.char, Viewer.explored_fgcolor, fontsize=fontsize, mono=mono
@@ -1367,19 +1376,35 @@ class Oil(Structure):
         super().__init__()
         self.burning = False
 
+class World(Structure):
+    char = "\U0001F310" #"\U0001F30D"
+    block_sight = True
+    block_movement = True
+    block_shooting = True
+
+    def activate(self):
+        for d in [d for d in Game.items.values()
+                  if isinstance(d, Download) and d.backpack]:
+            del Game.items[d.number] # delete downloads
+            Game.player.xp += 50
+            Flytext(tx=Game.player.x, ty=Game.player.y,
+                    text="*** upload ***")
+
+
 
 class Terminal(Structure):
     char = "\U0001F4BB"
     fgcolor = (100, 100, 100)  # grey
-    block_sight = False
+    block_sight = True
     block_movement = True
-    block_shooting = False
+    block_shooting = True
 
     def create_pictures(self, neighbors):
         super().create_pictures(fontsize=Viewer.fontsize)
 
     def effect_download(self):
         # Game.player.downloads += 1
+        self.block_sight = False
         d = Download(Game.player.x, Game.player.y, Game.player.z)
         d.backpack = True
         zerostring = list("010101010101010101010")
@@ -3010,12 +3035,22 @@ class Viewer:
                         if event.key == pygame.K_e:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
+                            # ---------- checking if standing next to a World ------
+                            if (hero.y > 0 and hero.x > 0 and
+                                    hero.y < len(Game.dungeon[hero.z]) - 1 and
+                                    hero.x < len(Game.dungeon[hero.z][0]) - 1):
+                                for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+                                    t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
+                                    if isinstance(t, World):
+                                        t.activate()
+
                             if hero.y > 0 and isinstance(
                                 Game.dungeon[hero.z][hero.y - 1][hero.x], Terminal
                             ):
                                 Game.dungeon[hero.z][hero.y - 1][
                                     hero.x
                                 ].effect_download()
+
                             else:
                                 self.loglines.extend(self.g.eat())
                             panel_has_changed = True
@@ -3423,7 +3458,10 @@ def impact_bubbles(a, b):
     bx, by = Viewer.tile_to_pixel((b.x, b.y))
     # ax, ay = Viewer.tile_to_pixel((a.x,a.y))
     m = pygame.math.Vector2(b.x, b.y) - pygame.math.Vector2(a.x, a.y)
-    m.normalize_ip()
+    try:
+        m.normalize_ip()
+    except:
+        return
     # impact point
     impactpoint = pygame.math.Vector2(bx, by) - m * Viewer.gridsize[0] // 2
     Flytext(
@@ -3544,10 +3582,11 @@ legend = {
     "t": Terminal,
     ":": Oil,
     "a": Arrow,
+    "w": World,
 }
 level1 = """
 ######################################
-#@kd.................TTT....$.....M..#
+#@kd..M.ß.MMMM.......TTT....$.....M..#
 #>a########gd#.....#...t....#...#....#
 ##a#.##f..#gd#.#...#.......###.......#
 #.$$.M....gß.g.#...#...ff..#...$...k.#
@@ -3567,7 +3606,7 @@ level2 = """
 #...............g......g......:::::::...........................#
 #...............#.F....d........................................#
 #.kk.k.k........d..F...#...............................kk.......#
-#...............###d#g##........................................#
+#...............###t####........................................#
 #......................................::::::::::::::::...###d###
 #......................................::::::::::::::::...d.FFF.#
 #......................................::::::::::::::::...#.FFF.#
@@ -3576,7 +3615,7 @@ level2 = """
 level3 = """
 ################################
 #..............................#
-#<.............................#
+#<..........w..................#
 #..............................#
 ################################"""
 
