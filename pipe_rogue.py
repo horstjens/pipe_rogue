@@ -593,6 +593,25 @@ class Bubble(VectorSprite):
         self.image.convert_alpha()
         self.rect = self.image.get_rect()
 
+class Button:
+
+    def __init__(self, x1,y1, width, height, bgcolor, fgcolor, picture, text):
+        self.x1 = x1
+        self.y1 = y1
+        self.width = width
+        self.height = height
+        self.bgcolor = bgcolor
+        self.fgcolor = fgcolor
+        self.picture = picture
+        self.text = text
+        ### ---
+        self.rect = pygame.Rect(x1,y1,width, height)
+
+    def activate(self):
+        pass
+
+
+
 
 class Game:
     player = None
@@ -945,7 +964,7 @@ class Game:
             for b in m.buffs:
                 b.update()
             m.buffs = [b for b in m.buffs if b.active]
-            #print(m, m.buffs)
+            # print(m, m.buffs)
         # --------- move the hero --------------
         text.extend(self.move(hero, dx, dy))  # test if move is legal and move
         # found stair?
@@ -993,10 +1012,13 @@ class Game:
             if isinstance(north, Terminal):
                 text.append("press e to activate the terminal")
         # ---------- checking if standing next to a World ------
-        if (hero.y > 0 and hero.x > 0 and
-            hero.y < len(Game.dungeon[hero.z]) - 1 and
-            hero.x < len(Game.dungeon[hero.z][0]) -1):
-            for dx, dy in ((0,-1),(1,0),(0,1),(-1,0)):
+        if (
+            hero.y > 0
+            and hero.x > 0
+            and hero.y < len(Game.dungeon[hero.z]) - 1
+            and hero.x < len(Game.dungeon[hero.z][0]) - 1
+        ):
+            for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
                 t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
                 if isinstance(t, World):
                     text.append("press e to upload your downloads to the world")
@@ -1059,10 +1081,10 @@ class Game:
             e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y
         ]:
             text.append(e.make_damage(Game.player))
-            #damage = e.damage
-            #text.append(f"You suffer {damage} {e.__class__.__name__} damage")
-            #e.text_effect(damage)
-            #hero.hp -= e.damage
+            # damage = e.damage
+            # text.append(f"You suffer {damage} {e.__class__.__name__} damage")
+            # e.text_effect(damage)
+            # hero.hp -= e.damage
         # cleanup code, remove dead monsters:
         for m in [m for m in Game.zoo.values() if m.hp <= 0]:
             if m.number == hero.number:
@@ -1176,10 +1198,12 @@ class Effect:
                     Flytext(tx=victim.x, ty=victim.y, text="Shield destroyed!")
                 return f"{self.__class__.__name__} damage negated by shield buff"
         victim.hp -= self.damage
-        Flytext(tx=victim.x, ty=victim.y, text= f"{self.__class__.__name__} dmg: -{self.damage}hp")
+        Flytext(
+            tx=victim.x,
+            ty=victim.y,
+            text=f"{self.__class__.__name__} dmg: -{self.damage}hp",
+        )
         return f"You suffer {self.damage} points of {self.__class__.__name__} damage"
-
-
 
     def next_turn(self):
         # self.age = Game.turn_number - self.born
@@ -1304,7 +1328,6 @@ class Structure:
         # self.char = None  # for textual representation btw for make_text(char)
         # self.nesw = nesw  # neighboring tiles of the same structure, . tuple of 4 boools: north, east, south, west
 
-
     def create_pictures(self, neighborlist=None, fontsize=48, mono=False):
         self.exploredpic = make_text(
             self.char, Viewer.explored_fgcolor, fontsize=fontsize, mono=mono
@@ -1376,20 +1399,20 @@ class Oil(Structure):
         super().__init__()
         self.burning = False
 
+
 class World(Structure):
-    char = "\U0001F310" #"\U0001F30D"
+    char = "\U0001F310"  # "\U0001F30D"
     block_sight = True
     block_movement = True
     block_shooting = True
 
     def activate(self):
-        for d in [d for d in Game.items.values()
-                  if isinstance(d, Download) and d.backpack]:
-            del Game.items[d.number] # delete downloads
+        for d in [
+            d for d in Game.items.values() if isinstance(d, Download) and d.backpack
+        ]:
+            del Game.items[d.number]  # delete downloads
             Game.player.xp += 50
-            Flytext(tx=Game.player.x, ty=Game.player.y,
-                    text="*** upload ***")
-
+            Flytext(tx=Game.player.x, ty=Game.player.y, text="*** upload ***")
 
 
 class Terminal(Structure):
@@ -1497,6 +1520,7 @@ class Door(Structure):
 
 class Glass(Structure):
     """looking through is possible, shooting and walking is not"""
+
     # USE font instead of freetype so that doors get not expanded (ugly)
     fgcolor = (200, 255, 250)  # cyan-white
     # nesw_tile = "#"  # wall neighbor tile
@@ -1598,6 +1622,7 @@ class Item:
 
     def fovpicture(self):
         return self.pictures[0]
+
 
 class Coin(Item):
     pictures = []
@@ -1815,7 +1840,6 @@ class Monster:
         pic = make_text(cls.char, cls.fgcolor, font=Viewer.font2)
         cls.pictures.append(pic)
 
-
     def __init__(self, x, y, z):
         self.number = Game.monsternumber  # get unique monsternumber
         Game.monsternumber += 1  # increase global monsternumber
@@ -1828,7 +1852,6 @@ class Monster:
         # self.fgcolor = (255,0,0)# "red"
         self.friendly = False  # friendly towards player?
         # self.char = "M"  # Monster
-
 
     def ai(self):
         # hunt player or move around at random?
@@ -1850,6 +1873,10 @@ class Monster:
             dy = 1
         return dx, dy
 
+    def is_attacked(self):
+        """someone else is attacking me"""
+        pass
+
     def update(self):
         """called once per game-turn for each monster"""
         pass
@@ -1858,6 +1885,26 @@ class Monster:
         # print("returning fovpicture of", self.__class__.__name__)
         return self.pictures[0]
 
+
+class CrazyCat(Monster):
+    pictures = []
+    fgcolor = (0,0,222)
+    char = "\U0001F638"
+    p_hunting = 0.0
+
+    def __init__(self, x,y,z):
+        super().__init__(x,y,z)
+        self.mana = 100
+        if random.random() < 0.5:
+            self.ai_dx = (-1,1)
+            self.ai_dy = (0,0)
+        else:
+            self.ai_dx = (0, 0)
+            self.ai_dy = (-1, 1)
+
+    def is_attacked(self):
+        """someone else is attacking me"""
+        Burning(monsternumber = self.number)
 
 class Snake(Monster):
     pictures = []
@@ -1961,9 +2008,6 @@ class WaterDragon(Monster):
         return super().ai()
 
 
-
-
-
 class Player(Monster):
     pictures = []
     char = "\u263A"  # "\u263A"  #heart: "\u2665" # music:"\u266B"  # sun "\u2609" #thunderstorm: "\u2608" #lighting: "\u2607" # double wave: "\u2248"  # sum: "\u2211" 3stars:  "\u2042" # "@"
@@ -2016,7 +2060,9 @@ class Player(Monster):
         print("to hit chance:", p, "roll:", roll)
         return roll < p
 
-    def shoot_arrow(self, target_tx, target_ty, fly_through_victims=True, drop_at_end_chance=0.99):
+    def shoot_arrow(
+        self, target_tx, target_ty, fly_through_victims=True, drop_at_end_chance=0.99
+    ):
         """player want to shoot an arrow from his tile to tx,ty
         check if player has an arrow"""
         # self shooting?
@@ -2041,7 +2087,7 @@ class Player(Monster):
             ok = calculate_line((self.x, self.y), point, self.z, "shoot")
             if not ok:
                 Flytext(tx=self.x, ty=self.y, text="No valid target tile", fontsize=12)
-                return # shooting not possible
+                return  # shooting not possible
             distance = ((self.x - point[0]) ** 2 + (self.y - point[1]) ** 2) ** 0.5
             delay = distance / max_distance * max_time
             # theoretically there should be only one monster at a given dungeon tile
@@ -2061,7 +2107,7 @@ class Player(Monster):
                         age=-delay,
                         fontsize=12,
                     )
-                    break # can hit only one victim per tile
+                    break  # can hit only one victim per tile
                 else:
                     Flytext(tx=v.x, ty=v.y, text="miss", age=-delay, fontsize=12)
                 # for _ in range(10):
@@ -2069,23 +2115,20 @@ class Player(Monster):
                 # p = pygame.math.Vector2(px, py)
                 # Bubble(pos=p, age=-0.5)
             else:
-                continue # arrow has hit nothing, fly to next tile
+                continue  # arrow has hit nothing, fly to next tile
             # arrow has hit someone at this tile
             if fly_through_victims:
-                continue # fly through all victims in path
-            break # stop flying
-
+                continue  # fly through all victims in path
+            break  # stop flying
 
             # ---- passed this tile ---
         # ----- fly arrow from player to point! because flight-path may be blocked
-        FlyingObject(
-                start_tile=points[0], end_tile=point, picture=Arrow.pictures[0]
-            )
+        FlyingObject(start_tile=points[0], end_tile=point, picture=Arrow.pictures[0])
         # -------------drop arrow at end of flight path
         if random.random() < drop_at_end_chance:
             (arrows[0].x, arrows[0].y) = points[-1]
             print("end drop:", (arrows[0].x, arrows[0].y), points[-1])
-            arrows[0].backpack= False
+            arrows[0].backpack = False
         else:
             # ---- destroy arrow ----
             del Game.items[arrows[0].number]
@@ -2106,6 +2149,7 @@ class Viewer:
     explored_fgcolor = (0, 100, 0)
     explored_bgcolor = (10, 10, 10)
     panelcolor = (128, 128, 64)
+    buttons = []
     # tile coordinate of topleft corner of currently visible tile on screen
     toplefttile = [
         0,
@@ -2197,6 +2241,14 @@ class Viewer:
         self.make_panel()
         self.make_radar()
         self.make_log()
+        # ----- create buttons -----
+        w = Viewer.panelwidth // 4
+        y = 260 + Viewer.panelwidth # radarsize y
+        h = 40
+        Viewer.buttons.append(Button(Viewer.width-Viewer.panelwidth + w*0, y, w, h, bgcolor=(15,15,15),
+                                     fgcolor=(0,128,128), picture=make_text("help"),text="display help text"))
+        Viewer.buttons.append(Button(Viewer.width - Viewer.panelwidth + w * 1, y, w, h, bgcolor=(15, 15, 15),
+                                     fgcolor=(0, 128, 128), picture=make_text("stat"), text="buffs & stats"))
         self.run()
 
     def load_images(self):
@@ -2207,18 +2259,15 @@ class Viewer:
         ).convert_alpha()
         # ----- images from battle of wesnoth ------
         # -------- bow --------
-        bowsize = [int(Viewer.gridsize[0]/1.5), int(Viewer.gridsize[1]/1.5)]
+        bowsize = [int(Viewer.gridsize[0] / 1.5), int(Viewer.gridsize[1] / 1.5)]
         Viewer.images["bow"] = pygame.image.load(
             os.path.join("data", "from_wesnoth", "skill_bow.png")
         ).convert_alpha()
-        Viewer.images["bow"] = pygame.transform.scale(
-            Viewer.images["bow"], bowsize)
+        Viewer.images["bow"] = pygame.transform.scale(Viewer.images["bow"], bowsize)
 
         # -----bow_no -----------
         Viewer.images["bow_no"] = Viewer.images["bow"].copy()
-        pygame.draw.line(
-            Viewer.images["bow_no"], (255, 0, 0), (0, 0), bowsize, 5
-        )
+        pygame.draw.line(Viewer.images["bow_no"], (255, 0, 0), (0, 0), bowsize, 5)
         pygame.draw.line(
             Viewer.images["bow_no"],
             (255, 0, 0),
@@ -2493,6 +2542,18 @@ class Viewer:
         )
         write(self.panelscreen, "\u27B3", 5, 235, font_size=30)
         write(self.panelscreen, "{:>3}".format(arrows), 25, 235, font_size=25)
+        # ---------- button row ------------
+        # divide space equally into 4 buttons
+        y = 260
+        #pygame.draw.rect(self.panelscreen, (222, 0, 222), (0, y, Viewer.panelwidth, 40))
+        w = Viewer.panelwidth // 4
+        for b in Viewer.buttons:
+            pygame.draw.rect(self.panelscreen, b.bgcolor, (b.x1 - Viewer.width + Viewer.panelwidth, b.width, b.y1 - Viewer.panelwidth , b.height))
+        #for r in range(4):
+        #    pygame.draw.rect(self.panelscreen, (0,0,0), (w*r,y, w,40 ),2)
+        #for nr, t in enumerate(("?","buffs", "inv.","tile" )):
+        #    write(self.panelscreen,text=t,x=w*nr+5, y=y+5, font_size=16  )
+
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -2658,21 +2719,23 @@ class Viewer:
                         # ----display up to 9 active effects in each corner of monster
                         # start first buff in lower right corner, then move to left, than higher but right, etc
                         for nr, b in enumerate(m.buffs):
-                            bx, by = 0, 0 # topleft corner of blit
+                            bx, by = 0, 0  # topleft corner of blit
                             if nr > 8:
-                                print("buff overflow: i can only display 9 buffs at once")
-                            if nr % 3 == 0: # 0, 3, 6
+                                print(
+                                    "buff overflow: i can only display 9 buffs at once"
+                                )
+                            if nr % 3 == 0:  # 0, 3, 6
                                 bx = Viewer.gridsize[0] // 3 * 2
-                            elif nr % 3 ==1: # 1, 4, 7
+                            elif nr % 3 == 1:  # 1, 4, 7
                                 bx = Viewer.gridsize[0] // 3 * 1
-                            elif nr % 3 ==2: # 2, 5, 8
-                                bx = 0 # Viewer.gridsize[0] // 3 * 0
+                            elif nr % 3 == 2:  # 2, 5, 8
+                                bx = 0  # Viewer.gridsize[0] // 3 * 0
                             if nr // 3 == 0:  # 0 ,1 ,2
                                 by = Viewer.gridsize[1] // 3 * 2
-                            elif nr // 3 == 1: # 3, 4 , 5
+                            elif nr // 3 == 1:  # 3, 4 , 5
                                 by = Viewer.gridsize[1] // 3 * 1
-                            elif nr // 3 == 2: # 6, 7 ,8
-                                by = 0 # Viewer.gridsize[1] // 3 * 0
+                            elif nr // 3 == 2:  # 6, 7 ,8
+                                by = 0  # Viewer.gridsize[1] // 3 * 0
 
                             self.screen.blit(b.pictures[0], (x + bx, y + by))
                     # ------------- effects --------------
@@ -2704,7 +2767,6 @@ class Viewer:
                         (x, y, Viewer.gridsize[0], Viewer.gridsize[1]),
                         1,
                     )
-
 
     def paint_animation(self, seconds):
         """update animated tiles (effects) between player turns
@@ -2854,7 +2916,7 @@ class Viewer:
             if panel_has_changed:
                 self.make_panel()
             # ---- update panel with help for tile on cursor -----
-            #if not self.cursormode:
+            # if not self.cursormode:
             self.panelinfo()
             # ---- blit panel ---
             self.screen.blit(
@@ -2882,15 +2944,34 @@ class Viewer:
                     Game.player.z,
                     "shoot",
                 )
-                if ok and (Game.player.x, Game.player.y) != (self.cursor.tx, self.cursor.ty) :
+                if ok and (Game.player.x, Game.player.y) != (
+                    self.cursor.tx,
+                    self.cursor.ty,
+                ):
                     image = Viewer.images["bow"]
-                    distance = ((Game.player.x - self.cursor.tx) ** 2 + (Game.player.y - self.cursor.ty) ** 2) ** 0.5
+                    distance = (
+                        (Game.player.x - self.cursor.tx) ** 2
+                        + (Game.player.y - self.cursor.ty) ** 2
+                    ) ** 0.5
                     chance = Game.player.arrow_hit_chance(distance)
-                    write(self.screen, chance, pygame.mouse.get_pos()[0] - Viewer.gridsize[0] // 2,
-                          pygame.mouse.get_pos()[1] - 10, font_size=13, color=(128,0,128))
+                    write(
+                        self.screen,
+                        chance,
+                        pygame.mouse.get_pos()[0] - Viewer.gridsize[0] // 2,
+                        pygame.mouse.get_pos()[1] - 10,
+                        font_size=13,
+                        color=(128, 0, 128),
+                    )
                 else:
                     image = Viewer.images["bow_no"]
                 self.screen.blit(image, pygame.mouse.get_pos())
+            # ------- button helptext ----
+            for b in Viewer.buttons:
+                ##print(b.rect, pygame.mouse.get_pos())
+                if b.rect.collidepoint(pygame.mouse.get_pos()):
+                    ##print("maus in rect1")
+
+                    write(self.screen, b.text, Viewer.width-Viewer.panelwidth, b.rect.bottom, font_size=16)
             pygame.display.flip()
             # repaint = False
             if len(self.flygroup) > 0:
@@ -3018,7 +3099,7 @@ class Viewer:
                         if event.key == pygame.K_p:
                             # Game.player.toggle_shield()
                             # panel_has_changed = True
-                            #print("buffs:", hero.buffs)
+                            # print("buffs:", hero.buffs)
                             have_shield = False
                             for b in hero.buffs:
                                 if isinstance(b, Shield):
@@ -3036,9 +3117,12 @@ class Viewer:
                             # if south of terminal -> activate download,
                             # otherwise -> eat food
                             # ---------- checking if standing next to a World ------
-                            if (hero.y > 0 and hero.x > 0 and
-                                    hero.y < len(Game.dungeon[hero.z]) - 1 and
-                                    hero.x < len(Game.dungeon[hero.z][0]) - 1):
+                            if (
+                                hero.y > 0
+                                and hero.x > 0
+                                and hero.y < len(Game.dungeon[hero.z]) - 1
+                                and hero.x < len(Game.dungeon[hero.z][0]) - 1
+                            ):
                                 for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
                                     t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
                                     if isinstance(t, World):
@@ -3449,6 +3533,7 @@ def fight(a, b):
     damage = random.randint(1, 6)
     b.hp -= damage
     impact_bubbles(a, b)
+    b.is_attacked()
     return text
 
 
@@ -3484,10 +3569,10 @@ def impact_bubbles(a, b):
 
 def between(value, min=0, max=255):
     """makes sure a (color) value stays between a minimum and a maximum ( 0 and 255 )
-     :param float value: the value that should stay between min and max
-     :param float min:  the minimum value (lower limit)
-     :param float max:  the maximum value (upper limit)
-     :return: new_value"""
+    :param float value: the value that should stay between min and max
+    :param float min:  the minimum value (lower limit)
+    :param float max:  the maximum value (upper limit)
+    :return: new_value"""
     return 0 if value < min else max if value > max else value
 
 
@@ -3574,6 +3659,7 @@ legend = {
     "F": FireDragon,
     "W": WaterDragon,
     "S": SkyDragon,
+    "C": CrazyCat,
     "k": Key,
     "$": Coin,
     "f": Food,
@@ -3614,16 +3700,16 @@ level2 = """
 
 level3 = """
 ################################
-#..............................#
-#<..........w..................#
-#..............................#
+#..........C...................#
+#<.....C....w..................#
+#................C.............#
 ################################"""
 
 if __name__ == "__main__":
     # g = Game()
     Viewer(
         width=1200,
-        height=960,
+        height=800,
         gridsize=(64, 64),
         panelwidth=200,
         logheight=100,
