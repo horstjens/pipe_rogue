@@ -107,6 +107,7 @@ import pygame
 import pygame.freetype  # not automatically loaded when importing pygame!
 import random
 import os
+import sys
 
 version = 0.1
 
@@ -593,9 +594,9 @@ class Bubble(VectorSprite):
         self.image.convert_alpha()
         self.rect = self.image.get_rect()
 
-class Button:
 
-    def __init__(self, x1,y1, width, height, bgcolor, fgcolor, picture, text):
+class Button:
+    def __init__(self, x1, y1, width, height, bgcolor, fgcolor, picture, text):
         self.x1 = x1
         self.y1 = y1
         self.width = width
@@ -604,13 +605,13 @@ class Button:
         self.fgcolor = fgcolor
         self.picture = picture
         self.text = text
+        self.selected = False
         ### ---
-        self.rect = pygame.Rect(x1,y1,width, height)
+        self.rect = pygame.Rect(x1, y1, width, height)
+        self.image = pygame.transform.scale(self.picture, (self.width, self.height))
 
     def activate(self):
         pass
-
-
 
 
 class Game:
@@ -1888,23 +1889,24 @@ class Monster:
 
 class CrazyCat(Monster):
     pictures = []
-    fgcolor = (0,0,222)
+    fgcolor = (0, 0, 222)
     char = "\U0001F638"
     p_hunting = 0.0
 
-    def __init__(self, x,y,z):
-        super().__init__(x,y,z)
+    def __init__(self, x, y, z):
+        super().__init__(x, y, z)
         self.mana = 100
         if random.random() < 0.5:
-            self.ai_dx = (-1,1)
-            self.ai_dy = (0,0)
+            self.ai_dx = (-1, 1)
+            self.ai_dy = (0, 0)
         else:
             self.ai_dx = (0, 0)
             self.ai_dy = (-1, 1)
 
     def is_attacked(self):
         """someone else is attacking me"""
-        Burning(monsternumber = self.number)
+        Burning(monsternumber=self.number)
+
 
 class Snake(Monster):
     pictures = []
@@ -2243,12 +2245,32 @@ class Viewer:
         self.make_log()
         # ----- create buttons -----
         w = Viewer.panelwidth // 4
-        y = 260 + Viewer.panelwidth # radarsize y
+        y = 460 + Viewer.panelwidth  # radarsize y
         h = 40
-        Viewer.buttons.append(Button(Viewer.width-Viewer.panelwidth + w*0, y, w, h, bgcolor=(15,15,15),
-                                     fgcolor=(0,128,128), picture=make_text("help"),text="display help text"))
-        Viewer.buttons.append(Button(Viewer.width - Viewer.panelwidth + w * 1, y, w, h, bgcolor=(15, 15, 15),
-                                     fgcolor=(0, 128, 128), picture=make_text("stat"), text="buffs & stats"))
+        Viewer.buttons.append(
+            Button(
+                Viewer.width - Viewer.panelwidth + w * 0,
+                y,
+                w,
+                h,
+                bgcolor=(128, 128, 128),
+                fgcolor=(0, 0, 0),
+                picture=make_text("help"),
+                text="display help text",
+            )
+        )
+        Viewer.buttons.append(
+            Button(
+                Viewer.width - Viewer.panelwidth + w * 1,
+                y,
+                w,
+                h,
+                bgcolor=(128, 128, 128),
+                fgcolor=(0, 0, 0),
+                picture=make_text("stat"),
+                text="buffs & stats",
+            )
+        )
         self.run()
 
     def load_images(self):
@@ -2380,6 +2402,27 @@ class Viewer:
         # -------- create necessary sprites -----
         self.cursor = TileCursor()
         # self.cursor.visible = False
+
+    def paint_buttons(self):
+        #w = Viewer.panelwidth // 4
+        for nr, b in enumerate(Viewer.buttons):
+            pygame.draw.rect(
+                self.screen,
+                b.bgcolor,
+                (
+                    b.x1,
+                    b.y1,
+                    b.width,
+                    b.height,
+                ),
+            )
+            print("button", nr, b.x1, b.y1, b.width, b.height)
+            self.screen.blit(b.image, (b.x1, b.y1) )
+
+        # for r in range(4):
+        #    pygame.draw.rect(self.panelscreen, (0,0,0), (w*r,y, w,40 ),2)
+        # for nr, t in enumerate(("?","buffs", "inv.","tile" )):
+        #    write(self.panelscreen,text=t,x=w*nr+5, y=y+5, font_size=16  )
 
     def make_panel(self):
         # in topright corner of screen is the radarscreen: panelwidth  x panelwidth
@@ -2545,14 +2588,7 @@ class Viewer:
         # ---------- button row ------------
         # divide space equally into 4 buttons
         y = 260
-        #pygame.draw.rect(self.panelscreen, (222, 0, 222), (0, y, Viewer.panelwidth, 40))
-        w = Viewer.panelwidth // 4
-        for b in Viewer.buttons:
-            pygame.draw.rect(self.panelscreen, b.bgcolor, (b.x1 - Viewer.width + Viewer.panelwidth, b.width, b.y1 - Viewer.panelwidth , b.height))
-        #for r in range(4):
-        #    pygame.draw.rect(self.panelscreen, (0,0,0), (w*r,y, w,40 ),2)
-        #for nr, t in enumerate(("?","buffs", "inv.","tile" )):
-        #    write(self.panelscreen,text=t,x=w*nr+5, y=y+5, font_size=16  )
+        # pygame.draw.rect(self.panelscreen, (222, 0, 222), (0, y, Viewer.panelwidth, 40))
 
 
     def make_log(self):
@@ -2971,7 +3007,14 @@ class Viewer:
                 if b.rect.collidepoint(pygame.mouse.get_pos()):
                     ##print("maus in rect1")
 
-                    write(self.screen, b.text, Viewer.width-Viewer.panelwidth, b.rect.bottom, font_size=16)
+                    write(
+                        self.screen,
+                        b.text,
+                        Viewer.width - Viewer.panelwidth,
+                        b.rect.bottom,
+                        font_size=16,
+                    )
+            self.paint_buttons()
             pygame.display.flip()
             # repaint = False
             if len(self.flygroup) > 0:
@@ -3042,8 +3085,8 @@ class Viewer:
                         #    px,py = self.tile_to_pixel(cell)
                         #    BlueTile(pos=pygame.math.Vector2(px,py))
 
-                        if event.key == pygame.K_ESCAPE:
-                            running = False
+                        #if event.key == pygame.K_ESCAPE:
+                        #    running = False
                         if event.key == pygame.K_f:
                             # start selection with cursor (mouse)
                             self.cursormode = True
@@ -3180,6 +3223,10 @@ class Viewer:
             # -----------------------------------------------------
         pygame.mouse.set_visible(True)
         pygame.quit()
+        #try:
+        #    sys.exit()
+        #finally:
+        #    pygame.quit()
 
 
 ## -------------------- functions --------------------------------
