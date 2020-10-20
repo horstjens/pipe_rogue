@@ -33,6 +33,9 @@ unicode tables:
 # font vs freetype: font can not render long unicode characters... render can. render can also rotate text
 
 """
+# TODO: hp-bar for monsters?
+
+# TODO: 2 or more monsters can occupy the same tile, monsters can become invisble when moving
 # TODO: somehow show remaining strenght of shield buff, test if shield buff cancels correctly if strenght == 0
 # TODO: redraw-order: arrow drops correctly at end of flight path, but is not visible until new turn (space pressed)
 # TODO: cursormode: , cleanup when using esc,
@@ -64,6 +67,7 @@ unicode tables:
 # TODO: animations of blocks / monsters when nothing happens -> animcycle
 # TODO: non-player light source / additive lightmap
 # TODO: drop items -> autoloot? manual pickup command?
+# done: Flytext ignoriert picture parameter
 # done: better code for FireDragon ( hunt/flee ), keep distance, reload...
 # done: shield: should protect from effect damange,
 # done: player can display up to 9 mini-buff icons (3x3 grid), starting from lower-right corner
@@ -340,6 +344,7 @@ class Flytext(VectorSprite):
         height_end=None,
         rotate_start=0,
         rotate_end=0,
+        picture = None,
     ):
         """Create a flying VectorSprite with text that disappears after a while
 
@@ -364,6 +369,7 @@ class Flytext(VectorSprite):
         :param int height_end:               end value for dynamic zooming of height in pixel
         :param float rotate_start:          start angle for dynamic rotation of the whole Flytext Sprite
         :param float rotate_end:            end angle for dynamic rotation
+        :param picture:                     a picture object
         :return: None
         """
 
@@ -389,6 +395,8 @@ class Flytext(VectorSprite):
         self.width_end = width_end
         self.height_start = height_start
         self.height_end = height_end
+        self.picture = picture
+        #print( "my picture is:", self.picture)
         if width_start is not None:
             self.width_diff_per_second = (width_end - width_start) / max_age
             self.recalc_each_frame = True
@@ -414,39 +422,47 @@ class Flytext(VectorSprite):
             move=move,
             max_age=max_age,
             age=age,
+            picture = picture,
         )
         self._layer = 7  # order of sprite layers (before / behind other sprites)
         # acceleration_factor  # if < 1, Text moves slower. if > 1, text moves faster.
 
     def create_image(self):
-        myfont = Viewer.font
-        # text, textrect = myfont.render(
-        # fgcolor=self.color,
-        # bgcolor=self.bgcolor,
-        # get_rect(text, style=STYLE_DEFAULT, rotation=0, size=0) -> rect
-        textrect = myfont.get_rect(
-            text=self.text,
-            size=self.fontsize,
-            rotation=self.textrotation,
-            style=self.style,
-        )  # font 22
-        self.image = pygame.Surface((textrect.width, textrect.height))
-        # render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
-        textrect = myfont.render_to(
-            surf=self.image,
-            dest=(0, 0),
-            text=self.text,
-            fgcolor=self.color,
-            bgcolor=self.bgcolor,
-            style=self.style,
-            rotation=self.textrotation,
-            size=self.fontsize,
-        )
-        if self.bgcolor is None:
-            self.image.set_colorkey((0, 0, 0))
+        if self.picture is not None:
+            #print("picture", self)
+            self.image = self.picture
+        else:
+            #print("no picture", self)
+            myfont = Viewer.font
+            # text, textrect = myfont.render(
+            # fgcolor=self.color,
+            # bgcolor=self.bgcolor,
+            # get_rect(text, style=STYLE_DEFAULT, rotation=0, size=0) -> rect
+            textrect = myfont.get_rect(
+                text=self.text,
+                size=self.fontsize,
+                rotation=self.textrotation,
+                style=self.style,
+            )  # font 22
+            self.image = pygame.Surface((textrect.width, textrect.height))
+            # render_to(surf, dest, text, fgcolor=None, bgcolor=None, style=STYLE_DEFAULT, rotation=0, size=0) -> Rect
+            textrect = myfont.render_to(
+                surf=self.image,
+                dest=(0, 0),
+                text=self.text,
+                fgcolor=self.color,
+                bgcolor=self.bgcolor,
+                style=self.style,
+                rotation=self.textrotation,
+                size=self.fontsize,
+            )
+            if self.bgcolor is None:
+                self.image.set_colorkey((0, 0, 0))
 
-        self.rect = textrect
-        # transparcent ?
+            self.rect = textrect
+            # picture ? overwrites text
+
+        # transparent ?
         if self.alpha_start == self.alpha_end == 255:
             pass
         elif self.alpha_start == self.alpha_end:
@@ -1023,6 +1039,10 @@ class Game:
                 t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
                 if isinstance(t, World):
                     text.append("press e to upload your downloads to the world")
+        # ------ trampolin ? ------
+        t = Game.dungeon[hero.z][hero.y + dy][hero.x + dx]
+        if isinstance(t, Trampolin):
+            Flytext(tx=hero.x, ty=hero.y, text="Juuuuuump!")
 
         # ------------- iterating over (damage) effects at player position ------
         # for e in [e for e in Game.effects.values() if e.tx == hero.x and e.ty == hero.y]:
@@ -1086,6 +1106,12 @@ class Game:
             # text.append(f"You suffer {damage} {e.__class__.__name__} damage")
             # e.text_effect(damage)
             # hero.hp -= e.damage
+        # --- give player xp for dead monsters ----
+        for m in [m for m in Game.zoo.values() if m.hp <= 0 and m.number != hero.number]:
+            hero.xp += m.xp_gain
+        hero.check_xp()
+
+
         # cleanup code, remove dead monsters:
         for m in [m for m in Game.zoo.values() if m.hp <= 0]:
             if m.number == hero.number:
@@ -1288,6 +1314,24 @@ class Water(Effect):
             Water.pictures.append(pic)
 
 
+class Ice(Effect):
+    pictures = []
+    wobble = (1, 1)
+    char = "\u2744"  # "#"\u2248"  # double wave instead of "~"
+    fgcolor = (128, 128, 255)
+    anim_cycle = 4
+    damage = 1
+
+    @classmethod
+    def create_pictures(cls):
+        # colorvalues = list(range(64, 256, 32))
+        # colorvalues.extend(list(range(255, 63, -32)))
+
+        for c in range(1):
+            pic = make_text(cls.char, cls.fgcolor)
+            cls.pictures.append(pic)
+
+
 class Flash(Effect):
     pictures = []  # necessary!
     char = "\u26A1"
@@ -1399,6 +1443,14 @@ class Oil(Structure):
     def __init__(self):
         super().__init__()
         self.burning = False
+
+
+class Trampolin(Structure):
+    char = "\u2725"
+    fgcolor = (0, 0, 64)  # brown
+    block_sight = False
+    block_movement = False
+    block_shooting = False
 
 
 class World(Structure):
@@ -1835,6 +1887,7 @@ class Monster:
     ai_dx = (0, 0, 0, 1, -1)
     ai_dy = (0, 0, 0, 1, -1)
     p_hunting = 0.5  # probability to move towards player
+    xp_gain = 15  # how much xp the player gains for killing this monster
 
     @classmethod
     def create_pictures(cls):
@@ -1892,6 +1945,7 @@ class CrazyCat(Monster):
     fgcolor = (0, 0, 222)
     char = "\U0001F638"
     p_hunting = 0.0
+    xp_gain = 50
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1914,6 +1968,37 @@ class Snake(Monster):
     char = "\U0001F40D"  # snake "#"\u046E"
     ai_dx = (0, 1, -1)
     ai_dy = (0, 1, -1)
+    xp_gain = 30
+
+
+class Yeti(Monster):
+    pictures = []
+    fgcolor = (200, 200, 200)
+    char = "\U0001F411"
+    p_shooting = 0.1  # probabiltiy to shoot at player
+    p_hunting = 0.4  # probability to move towards player
+    xp_gain = 50
+
+    def __init__(self, x, y, z):
+        super().__init__(x, y, z)
+        self.hp = 999
+
+    def ai(self):
+        # ---ice spitting---
+        if Game.dungeon[self.z][self.y][self.x].fov:  # visible?
+            if random.random() < self.p_shooting:
+                # spit fire if line-of-shight for shooting is True (can shoot)
+                if calculate_line(
+                    (self.x, self.y),
+                    (Game.player.x, Game.player.y),
+                    Game.player.z,
+                    modus="shoot",
+                ):
+                    points = get_line((self.x, self.y), (Game.player.x, Game.player.y))
+                    for f in points[:6]:
+                        Ice(f[0], f[1], max_age=2)
+
+        return super().ai()
 
 
 class FireDragon(Monster):
@@ -1922,6 +2007,7 @@ class FireDragon(Monster):
     char = "\U0001F409"
     p_shooting = 0.2  # probabiltiy to shoot at player
     p_hunting = 0.6  # probability to move towards player
+    xp_gain = 80
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1955,6 +2041,7 @@ class SkyDragon(Monster):
     fgcolor = (0, 0, 200)  # cyan
     char = "\U0001F479"  # japanese ogre "#"W" #char = "S"
     p_hunting = 0.4
+    xp_gain = 70
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -1986,6 +2073,7 @@ class WaterDragon(Monster):
     fgcolor = (0, 0, 255)  # blue
     char = "\U0001F419"  # octopus "#"W"
     p_hunting = 0.3
+    xp_gain = 55
 
     def __init__(self, x, y, z):
         super().__init__(x, y, z)
@@ -2036,6 +2124,15 @@ class Player(Monster):
         self.shield = False
         self.range_bonus = 1  # the higher, the better hit chance at big distance
         # self.backpack = [] # container for transported items
+
+    def check_xp(self):
+        if self.xp >= self.xp_full:
+            self.level += 1
+            #Flytext(tx=self.x, ty=self.y, text=f"reached lvl {self.level}")
+            #Flytext(tx=self.x, ty=self.y, text="Level Up", fontsize=200, max_age=5)
+            Flytext(tx=self.x, ty=self.y, text="xxx", picture=Viewer.images["bow"])
+
+            self.xp_full +=   100 + self.level * 10
 
     def update(self):
         """called once per game turn"""
@@ -2163,6 +2260,7 @@ class Viewer:
         0,
     ]
     images = {}
+    sounds = {}
     radardot = [1, 1]
 
     # playergroup = None # pygame sprite Group only for players
@@ -2197,6 +2295,7 @@ class Viewer:
 
         # ---- pygame init
         pygame.init()
+        pygame.mixer.init(11025) # raises exception on fail
         # Viewer.font = pygame.font.Font(os.path.join("data", "FreeMonoBold.otf"),26)
         # fontfile = os.path.join("data", "fonts", "DejaVuSans.ttf")
         fontfile = os.path.join("data", "fonts", "Symbola605.ttf")
@@ -2279,6 +2378,14 @@ class Viewer:
         Viewer.images["main"] = pygame.image.load(
             os.path.join("data", "from_stone_soup", "main.png")
         ).convert_alpha()
+        # ---- oskar sounds -----
+        Viewer.sounds["hit001"] = pygame.mixer.Sound(
+            os.path.join("data", "sounds", "hit001.wav"))
+
+        # ---- oskar images ------
+        #Viewer.images["lvlup"] = pygame.image.load(
+        #    os.path.join("data", "lvlup.png")
+        #).convert_alpha()
         # ----- images from battle of wesnoth ------
         # -------- bow --------
         bowsize = [int(Viewer.gridsize[0] / 1.5), int(Viewer.gridsize[1] / 1.5)]
@@ -2404,7 +2511,7 @@ class Viewer:
         # self.cursor.visible = False
 
     def paint_buttons(self):
-        #w = Viewer.panelwidth // 4
+        # w = Viewer.panelwidth // 4
         for nr, b in enumerate(Viewer.buttons):
             pygame.draw.rect(
                 self.screen,
@@ -2416,8 +2523,8 @@ class Viewer:
                     b.height,
                 ),
             )
-            print("button", nr, b.x1, b.y1, b.width, b.height)
-            self.screen.blit(b.image, (b.x1, b.y1) )
+            #print("button", nr, b.x1, b.y1, b.width, b.height)
+            self.screen.blit(b.image, (b.x1, b.y1))
 
         # for r in range(4):
         #    pygame.draw.rect(self.panelscreen, (0,0,0), (w*r,y, w,40 ),2)
@@ -2589,7 +2696,6 @@ class Viewer:
         # divide space equally into 4 buttons
         y = 260
         # pygame.draw.rect(self.panelscreen, (222, 0, 222), (0, y, Viewer.panelwidth, 40))
-
 
     def make_log(self):
         # self.logscreen = pygame.Surface((Viewer.width, Viewer.height - Viewer.logheight))
@@ -2894,7 +3000,7 @@ class Viewer:
             write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)
         for m in monsters:
             y += 15
-            text = m.__class__.__base__.__name__ + ": " + m.__class__.__name__
+            text = m.__class__.__base__.__name__ + ": " + m.__class__.__name__ + f" {m.hp} hp"
             # write(self.panelscreen, m.char, 0, y, m.fgcolor, font_size=20)
             write(self.panelscreen, text, 5, y, (0, 0, 0), font_size=14)
         for i in items:
@@ -3085,7 +3191,7 @@ class Viewer:
                         #    px,py = self.tile_to_pixel(cell)
                         #    BlueTile(pos=pygame.math.Vector2(px,py))
 
-                        #if event.key == pygame.K_ESCAPE:
+                        # if event.key == pygame.K_ESCAPE:
                         #    running = False
                         if event.key == pygame.K_f:
                             # start selection with cursor (mouse)
@@ -3136,9 +3242,13 @@ class Viewer:
                             dungeon_has_changed = True
                         if event.key == pygame.K_t:
                             # ----------- testing key -------
+                            Game.player.xp+= 10
+                            Game.player.check_xp()
+                            channel = Viewer.sounds["hit001"].play()
+                            #self.screen.blit(Viewer.images["bow"], (400,200))
                             # testing the buring buff
-                            Burning(monsternumber=hero.number)
-                            Flytext(tx=hero.x, ty=hero.y, text="Burning starts")
+                            #Burning(monsternumber=hero.number)
+                            #Flytext(tx=hero.x, ty=hero.y, text="Burning starts")
                         if event.key == pygame.K_p:
                             # Game.player.toggle_shield()
                             # panel_has_changed = True
@@ -3223,9 +3333,9 @@ class Viewer:
             # -----------------------------------------------------
         pygame.mouse.set_visible(True)
         pygame.quit()
-        #try:
+        # try:
         #    sys.exit()
-        #finally:
+        # finally:
         #    pygame.quit()
 
 
@@ -3521,23 +3631,16 @@ def dice_from_string(dicestring="1d6+0"):
     examples:
 
     1d6+0 ... one 6 sided die without re-roll
-
     2D6+0 ... two 6-sided dice with reroll
-
     1d20+1 ... one 20-sided die, correction value +1
-
     3D6-2 ... three 6-sided dice with reroll, sum has correction value of -2
 
     :param dicestring: string in the format {dice}d{sides}+{correction}, like "2d6+0"
 
     d........means dice without re-roll
-
     D........means dice with re-roll (1D6 count as 5 + the reroll value)
-
     {dice} ...means number of dice throws, 2d means 2 dice etc. the sum of all throws is returned. must be integer
-
     {sides} ...means mumber of sides per die dice. d20 means 20-sided dice etc. must be integer
-
     {correction}.......means correction value that is added (subtracted) to the sum of all throws. must be integer
 
     :returns: [int dice, bool recroll, int sides, int correction]
@@ -3581,6 +3684,8 @@ def fight(a, b):
     b.hp -= damage
     impact_bubbles(a, b)
     b.is_attacked()
+
+
     return text
 
 
@@ -3707,11 +3812,13 @@ legend = {
     "W": WaterDragon,
     "S": SkyDragon,
     "C": CrazyCat,
+    "Y": Yeti,
     "k": Key,
     "$": Coin,
     "f": Food,
     "ß": Snake,
     "T": Trap,
+    "?": Trampolin,
     "t": Terminal,
     ":": Oil,
     "a": Arrow,
@@ -3731,7 +3838,7 @@ level2 = """
 #################################################################
 #..<............................................................#
 #>...........kkkk...............................................#
-#...............................................................#
+#........?......................................................#
 #..................................................:::::::::::::#
 #...............##d##g##......:::::::...............::::::::::::#
 #...............#.W....#......:::::::..............:::::::::::::#
