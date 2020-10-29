@@ -150,7 +150,7 @@ class VectorSprite(pygame.sprite.Sprite):
         for key, arg in kwargs.items():
             setattr(self, key, arg)
         if "layer" not in kwargs:
-            self.layer = 0
+            self._layer = 0
         # else:
         #    self.layer = self.layer
         if "pos" not in kwargs:
